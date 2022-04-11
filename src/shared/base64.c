@@ -1,5 +1,7 @@
 #include "base64.h"
 
+#include <string.h>
+
 #define BASE64_PADDING '='
 #define BASE64_ILLEGAL_VALUE 0xff
 
