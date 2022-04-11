@@ -9,6 +9,7 @@ extern "C" {
 
 typedef struct {
 	worker_thread_pool *pool;
+	int running;
 	int id;
 } worker_thread_pool_context;
 
@@ -16,6 +17,7 @@ typedef struct {
 	void *data;
 } worker_thread_pool_task;
 
+// TODO should just take ID, not the whole context?
 typedef int (*worker_thread_pool_callback)(worker_thread_pool_context *context, void *data);
 
 typedef struct {
