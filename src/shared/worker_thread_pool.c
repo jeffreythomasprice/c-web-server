@@ -1,34 +1,59 @@
-#include "worker_thread_pool.h"
+#include <stdlib.h>
 
-#define ONE_MILLISECOND_IN_MICROSECONDS 1000
-#define ONE_SECOND_IN_MICROSECONDS 1000000
+#include "log.h"
+#include "worker_thread_pool.h"
 
 void *worker_thread_pool_pthread_callback(void *data) {
 	worker_thread_pool_context *context = data;
+	log_trace("worker_thread_pool_pthread_callback start, thread id %i\n", context->id);
+	pthread_mutex_lock(&context->pool->tasks_mutex);
 	while (context->running) {
-		// TODO wait for signal don't just sleep
-		usleep(ONE_MILLISECOND_IN_MICROSECONDS * 10);
+		struct timespec timeout;
+		timespec_get(&timeout, TIME_UTC);
+		// TODO timeout should be a constant
+		timeout.tv_sec + 5;
+		pthread_cond_timedwait(&context->pool->tasks_condition, &context->pool->tasks_mutex, &timeout);
+		log_trace("TODO JEFF worker_thread_pool_pthread_callback cond wait either timed out or got signal\n");
+		if (!context->running) {
+			break;
+		}
 
-		/*
-		TODO get work from queue, if available do it and execute callback with result
-		*/
+		// TODO if work is in the queue dequeue an element and execute it
 	}
+	pthread_mutex_unlock(&context->pool->tasks_mutex);
+	log_trace("worker_thread_pool_pthread_callback done, thread id %i\n", context->id);
+	return NULL;
 }
 
 int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callback callback, int num_threads, int queue_size) {
+	log_trace("worker_thread_pool_init, num_threads=%i, queue_size=%i\n", num_threads, queue_size);
 	if (!callback) {
+		log_error("worker_thread_pool_init failed, no callback\n");
 		return 1;
 	}
 	if (num_threads < 1) {
+		log_error("worker_thread_pool_init failed, num_threads must be positive\n");
 		return 1;
 	}
 	if (queue_size < 1) {
+		log_error("worker_thread_pool_init failed, queue_size must be positive\n");
 		return 1;
 	}
 	pool->callback = callback;
 	pool->num_threads = num_threads;
 	pool->queue_size = queue_size;
 
+	if (pthread_mutex_init(&pool->tasks_mutex, NULL)) {
+		log_error("worker_thread_pool_init failed, pthread_mutex_init failed on task mutex\n");
+		return 1;
+	}
+	if (pthread_cond_init(&pool->tasks_condition, NULL)) {
+		log_error("worker_thread_pool_init failed, pthread_cond_init failed on task mutex\n");
+		if (pthread_mutex_destroy(&pool->tasks_mutex)) {
+			log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
+		}
+		return 1;
+	}
 	pool->tasks = calloc(queue_size, sizeof(worker_thread_pool_task));
 	pool->next_task = 0;
 	pool->tasks_len = 0;
@@ -41,15 +66,22 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 		context->running = 1;
 		context->id = i;
 		if (pthread_create(&pool->threads[i], NULL, worker_thread_pool_pthread_callback, &pool->contexts[i])) {
+			log_error("worker_thread_pool_init failed, pthread_create failed on thread %i\n", i);
 			for (int j = 0; j < i; j++) {
 				pool->contexts[j].running = 0;
 			}
 			for (int j = 0; j < i; j++) {
-				// TODO signal first?
+				pthread_cond_broadcast(&pool->tasks_condition);
 				void *result;
 				if (pthread_join(pool->threads[j], &result)) {
-					// TODO non-0 means error, handling pthread_join failure
+					log_error("worker_thread_pool_init failed, pthread_join failed during shutdown on thread %i\n", j);
 				}
+			}
+			if (pthread_mutex_destroy(&pool->tasks_mutex)) {
+				log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
+			}
+			if (pthread_cond_destroy(&pool->tasks_condition)) {
+				log_error("worker_thread_pool_init failed, pthread_cond_destroy failed on task condition\n");
 			}
 			free(pool->tasks);
 			free(pool->contexts);
@@ -57,35 +89,63 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 			return 1;
 		}
 	}
+	log_trace("worker_thread_pool_init success\n");
 	return 0;
 }
 
-int worker_thread_pool_stop_and_join(worker_thread_pool *pool) {
+int worker_thread_pool_destroy(worker_thread_pool *pool) {
+	log_trace("worker_thread_pool_destroy start\n");
 	for (int i = 0; i < pool->num_threads; i++) {
 		pool->contexts[i].running = 0;
 	}
 	for (int i = 0; i < pool->num_threads; i++) {
-		// TODO signal first?
+		pthread_cond_broadcast(&pool->tasks_condition);
 		void *result;
 		if (pthread_join(pool->threads[i], &result)) {
-			// TODO non-0 means error, handling pthread_join failure
+			log_error("worker_thread_pool_destroy failed, pthread_join failed during shutdown on thread %i\n", i);
 		}
+	}
+	if (pthread_mutex_destroy(&pool->tasks_mutex)) {
+		log_error("worker_thread_pool_destroy failed, pthread_mutex_destroy failed on task mutex\n");
+	}
+	if (pthread_cond_destroy(&pool->tasks_condition)) {
+		log_error("worker_thread_pool_destroy failed, pthread_cond_destroy failed on task condition\n");
 	}
 	free(pool->tasks);
 	free(pool->contexts);
 	free(pool->threads);
+	log_trace("worker_thread_pool_destroy success\n");
 	return 0;
 }
 
-int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data) {
-	/*
-	TODO add new queue to task
+int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result) {
+	log_trace("worker_thread_pool_enqueue start\n");
+	pthread_mutex_lock(&pool->tasks_mutex);
 
-	lock
-	if queue is full, unlock and return failure
-	write data to next index
-	size++
-	unlock
-	return success
-	*/
+	if (pool->tasks_len == pool->queue_size) {
+		log_trace("worker_thread_pool_enqueue failed, queue is full\n");
+		pthread_mutex_unlock(&pool->tasks_mutex);
+		return 1;
+	}
+
+	int new_task_index = (pool->next_task + pool->tasks_len) % pool->queue_size;
+	pool->tasks_len++;
+
+	worker_thread_pool_task *task = &pool->tasks[new_task_index];
+	task->data = data;
+	task->result = thread_result;
+	task->done = 0;
+
+	while (!task->done) {
+		struct timespec timeout;
+		timespec_get(&timeout, TIME_UTC);
+		// TODO timeout should be a constant
+		timeout.tv_sec + 5;
+		pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
+		// TODO if pool has been destroyed abort
+	}
+
+	pthread_mutex_unlock(&pool->tasks_mutex);
+	log_trace("worker_thread_pool_enqueue success\n");
+	return 0;
 }

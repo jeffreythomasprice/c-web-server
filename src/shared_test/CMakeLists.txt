@@ -3,3 +3,8 @@ project(shared_test)
 add_executable(test_base64 base64.c)
 target_link_libraries(test_base64 shared)
 add_test(NAME test_base64 COMMAND test_base64)
+
+add_executable(test_worker_thread_pool worker_thread_pool.c)
+target_link_libraries(test_worker_thread_pool shared)
+add_test(NAME test_worker_thread_pool COMMAND test_worker_thread_pool)
+target_link_libraries(test_worker_thread_pool pthread)

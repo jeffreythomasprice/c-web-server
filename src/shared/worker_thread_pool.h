@@ -7,25 +7,31 @@ extern "C" {
 
 #include <pthread.h>
 
-typedef struct {
+typedef struct worker_thread_pool worker_thread_pool;
+
+typedef struct worker_thread_pool_context {
 	worker_thread_pool *pool;
 	int running;
 	int id;
 } worker_thread_pool_context;
 
-typedef struct {
+typedef struct worker_thread_pool_task {
+	// provided by caller
 	void *data;
+	// will be filled in when result is available
+	int *result;
+	int done;
 } worker_thread_pool_task;
 
-// TODO should just take ID, not the whole context?
-typedef int (*worker_thread_pool_callback)(worker_thread_pool_context *context, void *data);
+typedef int (*worker_thread_pool_callback)(int id, void *data);
 
-typedef struct {
+typedef struct worker_thread_pool {
 	worker_thread_pool_callback callback;
 	int queue_size;
 	int num_threads;
 
-	// TODO need a lock for task queue
+	pthread_mutex_t tasks_mutex;
+	pthread_cond_t tasks_condition;
 	// the task queue, capcaity = queue_size
 	worker_thread_pool_task *tasks;
 	// the index of the next task that should be dequeued
@@ -51,7 +57,7 @@ Stops all worker threads and waits until all are completed. Frees all resources.
 
 Returns 0 on success, non-0 on failure.
 */
-int worker_thread_pool_stop_and_join(worker_thread_pool *pool);
+int worker_thread_pool_destroy(worker_thread_pool *pool);
 
 /*
 Enqueues a new job in the queue and blocks until it is complete.
