@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <stdlib.h>
 
 #include "log.h"
@@ -11,9 +12,16 @@ void *worker_thread_pool_pthread_callback(void *data) {
 		struct timespec timeout;
 		timespec_get(&timeout, TIME_UTC);
 		// TODO timeout should be a constant
-		timeout.tv_sec + 5;
-		pthread_cond_timedwait(&context->pool->tasks_condition, &context->pool->tasks_mutex, &timeout);
-		log_trace("TODO JEFF worker_thread_pool_pthread_callback cond wait either timed out or got signal\n");
+		timeout.tv_sec += 1;
+		int cond_error = pthread_cond_timedwait(&context->pool->tasks_condition, &context->pool->tasks_mutex, &timeout);
+		if (cond_error == ETIMEDOUT) {
+			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait timed out\n", context->id);
+		} else if (cond_error) {
+			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id,
+					  cond_error);
+		} else {
+			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait signalled\n", context->id);
+		}
 		if (!context->running) {
 			break;
 		}
@@ -120,6 +128,7 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 
 int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result) {
 	log_trace("worker_thread_pool_enqueue start\n");
+	// TODO JEFF this mutex doesn't grab, the worker threads got the mutex but this can't?
 	pthread_mutex_lock(&pool->tasks_mutex);
 
 	if (pool->tasks_len == pool->queue_size) {
@@ -130,6 +139,7 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 
 	int new_task_index = (pool->next_task + pool->tasks_len) % pool->queue_size;
 	pool->tasks_len++;
+	log_trace("worker_thread_pool_enqueue, new task index %i, new task queue length %i\n", new_task_index, pool->tasks_len);
 
 	worker_thread_pool_task *task = &pool->tasks[new_task_index];
 	task->data = data;
@@ -140,8 +150,15 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 		struct timespec timeout;
 		timespec_get(&timeout, TIME_UTC);
 		// TODO timeout should be a constant
-		timeout.tv_sec + 5;
-		pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
+		timeout.tv_sec += 1;
+		int cond_error = pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
+		if (cond_error == ETIMEDOUT) {
+			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait timed out\n");
+		} else if (cond_error) {
+			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait error %i\n", cond_error);
+		} else {
+			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait signalled\n");
+		}
 		// TODO if pool has been destroyed abort
 	}
 
