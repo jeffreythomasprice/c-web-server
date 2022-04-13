@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <pthread.h>
+#include <semaphore.h>
 
 typedef struct worker_thread_pool worker_thread_pool;
 
@@ -31,13 +32,14 @@ typedef struct worker_thread_pool {
 	int num_threads;
 
 	pthread_mutex_t tasks_mutex;
-	pthread_cond_t tasks_condition;
 	// the task queue, capcaity = queue_size
 	worker_thread_pool_task *tasks;
 	// the index of the next task that should be dequeued
 	int next_task;
 	// the number of tasks currently enqueued
 	int tasks_len;
+	// signalled when tasks become available
+	sem_t tasks_semaphore;
 
 	worker_thread_pool_context *contexts;
 	pthread_t *threads;

@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "log.h"
 #include "worker_thread_pool.h"
@@ -13,14 +14,17 @@ void *worker_thread_pool_pthread_callback(void *data) {
 		timespec_get(&timeout, TIME_UTC);
 		// TODO timeout should be a constant
 		timeout.tv_sec += 1;
-		int cond_error = pthread_cond_timedwait(&context->pool->tasks_condition, &context->pool->tasks_mutex, &timeout);
-		if (cond_error == ETIMEDOUT) {
-			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait timed out\n", context->id);
-		} else if (cond_error) {
+		int semaphore_error = sem_timedwait(&context->pool->tasks_semaphore, &timeout);
+		switch (semaphore_error) {
+		case 0:
+			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, sem_timedwait signalled\n", context->id);
+			break;
+		case ETIMEDOUT:
+			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, sem_timedwait timed out\n", context->id);
+			break;
+		default:
 			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id,
-					  cond_error);
-		} else {
-			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait signalled\n", context->id);
+					  semaphore_error);
 		}
 		if (!context->running) {
 			break;
@@ -55,8 +59,8 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 		log_error("worker_thread_pool_init failed, pthread_mutex_init failed on task mutex\n");
 		return 1;
 	}
-	if (pthread_cond_init(&pool->tasks_condition, NULL)) {
-		log_error("worker_thread_pool_init failed, pthread_cond_init failed on task mutex\n");
+	if (sem_init(&pool->tasks_semaphore, 0, 0)) {
+		log_error("worker_thread_pool_init failed, sem_init failed on task semaphore %i\n", errno);
 		if (pthread_mutex_destroy(&pool->tasks_mutex)) {
 			log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
 		}
@@ -79,7 +83,7 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 				pool->contexts[j].running = 0;
 			}
 			for (int j = 0; j < i; j++) {
-				pthread_cond_broadcast(&pool->tasks_condition);
+				sem_post(&pool->tasks_semaphore);
 				void *result;
 				if (pthread_join(pool->threads[j], &result)) {
 					log_error("worker_thread_pool_init failed, pthread_join failed during shutdown on thread %i\n", j);
@@ -88,8 +92,8 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 			if (pthread_mutex_destroy(&pool->tasks_mutex)) {
 				log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
 			}
-			if (pthread_cond_destroy(&pool->tasks_condition)) {
-				log_error("worker_thread_pool_init failed, pthread_cond_destroy failed on task condition\n");
+			if (sem_destroy(&pool->tasks_semaphore)) {
+				log_error("worker_thread_pool_init failed, sem_destroy failed on task semaphore\n");
 			}
 			free(pool->tasks);
 			free(pool->contexts);
@@ -103,11 +107,16 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 
 int worker_thread_pool_destroy(worker_thread_pool *pool) {
 	log_trace("worker_thread_pool_destroy start\n");
+	// all threads should be exiting
 	for (int i = 0; i < pool->num_threads; i++) {
 		pool->contexts[i].running = 0;
 	}
+	// wake all threads up
 	for (int i = 0; i < pool->num_threads; i++) {
-		pthread_cond_broadcast(&pool->tasks_condition);
+		sem_post(&pool->tasks_semaphore);
+	}
+	// wait for all threads to die
+	for (int i = 0; i < pool->num_threads; i++) {
 		void *result;
 		if (pthread_join(pool->threads[i], &result)) {
 			log_error("worker_thread_pool_destroy failed, pthread_join failed during shutdown on thread %i\n", i);
@@ -116,8 +125,8 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 	if (pthread_mutex_destroy(&pool->tasks_mutex)) {
 		log_error("worker_thread_pool_destroy failed, pthread_mutex_destroy failed on task mutex\n");
 	}
-	if (pthread_cond_destroy(&pool->tasks_condition)) {
-		log_error("worker_thread_pool_destroy failed, pthread_cond_destroy failed on task condition\n");
+	if (sem_destroy(&pool->tasks_semaphore)) {
+		log_error("worker_thread_pool_destroy failed, sem_destroy failed on task semaphore\n");
 	}
 	free(pool->tasks);
 	free(pool->contexts);
@@ -146,21 +155,23 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 	task->result = thread_result;
 	task->done = 0;
 
-	while (!task->done) {
-		struct timespec timeout;
-		timespec_get(&timeout, TIME_UTC);
-		// TODO timeout should be a constant
-		timeout.tv_sec += 1;
-		int cond_error = pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
-		if (cond_error == ETIMEDOUT) {
-			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait timed out\n");
-		} else if (cond_error) {
-			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait error %i\n", cond_error);
-		} else {
-			log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait signalled\n");
-		}
-		// TODO if pool has been destroyed abort
-	}
+	// TODO wait until task is complete, new semaphore?
+
+	// while (!task->done) {
+	// 	struct timespec timeout;
+	// 	timespec_get(&timeout, TIME_UTC);
+	// 	// TODO timeout should be a constant
+	// 	timeout.tv_sec += 1;
+	// 	int cond_error = pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
+	// 	if (cond_error == ETIMEDOUT) {
+	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait timed out\n");
+	// 	} else if (cond_error) {
+	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait error %i\n", cond_error);
+	// 	} else {
+	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait signalled\n");
+	// 	}
+	// 	// TODO if pool has been destroyed abort
+	// }
 
 	pthread_mutex_unlock(&pool->tasks_mutex);
 	log_trace("worker_thread_pool_enqueue success\n");
