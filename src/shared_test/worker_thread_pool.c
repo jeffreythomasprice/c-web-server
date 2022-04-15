@@ -5,24 +5,27 @@
 typedef struct {
 	int a;
 	int b;
+	int result;
 } task_data;
 
 int callback(int id, void *data) {
 	task_data *d = data;
 	printf("task executing on worker %i, a=%i, b=%i", id, d->a, d->b);
 	fflush(stdout);
-	return d->a + d->b;
+	d->result = d->a + d->b;
+	return 0;
 }
 
 int do_task(worker_thread_pool *pool, int a, int b) {
 	task_data d;
 	d.a = a;
 	d.b = b;
-	int result;
 	printf("enqeueing a=%i, b=%i\n", a, b);
 	fflush(stdout);
-	worker_thread_pool_enqueue(&pool, &d, &result);
-	return result;
+	int result;
+	worker_thread_pool_enqueue(pool, &d, &result);
+	printf("worker status code result %i\n", result);
+	return d.result;
 }
 
 int main(int argc, char **argv) {

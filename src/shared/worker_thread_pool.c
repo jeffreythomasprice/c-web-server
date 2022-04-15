@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include "log.h"
@@ -8,7 +9,6 @@
 void *worker_thread_pool_pthread_callback(void *data) {
 	worker_thread_pool_context *context = data;
 	log_trace("worker_thread_pool_pthread_callback start, thread id %i\n", context->id);
-	pthread_mutex_lock(&context->pool->tasks_mutex);
 	while (context->running) {
 		struct timespec timeout;
 		timespec_get(&timeout, TIME_UTC);
@@ -30,9 +30,30 @@ void *worker_thread_pool_pthread_callback(void *data) {
 			break;
 		}
 
-		// TODO if work is in the queue dequeue an element and execute it
+		// if work is in the queue dequeue an element and execute it
+		pthread_mutex_lock(&context->pool->tasks_mutex);
+		if (context->pool->task_pending_len > 0) {
+			// get the next task from the queue
+			worker_thread_pool_task *task = context->pool->task_pending_first;
+			context->pool->task_pending_first = context->pool->task_pending_first->next;
+			if (!context->pool->task_pending_first) {
+				context->pool->task_pending_last = NULL;
+			}
+			context->pool->task_pending_len--;
+			log_trace("worker_thread_pool_pthread_callback dequeued task, new task len %i\n", context->pool->task_pending_len);
+			pthread_mutex_unlock(&context->pool->tasks_mutex);
+
+			// actually do the work
+			int callback_result = context->pool->callback(context->id, task->data);
+			if (task->result) {
+				*task->result = callback_result;
+			}
+			sem_post(&task->semaphore);
+		} else {
+			// nothing to do
+			pthread_mutex_unlock(&context->pool->tasks_mutex);
+		}
 	}
-	pthread_mutex_unlock(&context->pool->tasks_mutex);
 	log_trace("worker_thread_pool_pthread_callback done, thread id %i\n", context->id);
 	return NULL;
 }
@@ -51,55 +72,37 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 		log_error("worker_thread_pool_init failed, queue_size must be positive\n");
 		return 1;
 	}
+	memset(pool, 0, sizeof(worker_thread_pool));
 	pool->callback = callback;
 	pool->num_threads = num_threads;
-	pool->queue_size = queue_size;
+	pool->max_queue_size = queue_size;
 
 	if (pthread_mutex_init(&pool->tasks_mutex, NULL)) {
 		log_error("worker_thread_pool_init failed, pthread_mutex_init failed on task mutex\n");
+		worker_thread_pool_destroy(pool);
 		return 1;
 	}
+	pool->tasks_mutex_is_init = 1;
 	if (sem_init(&pool->tasks_semaphore, 0, 0)) {
 		log_error("worker_thread_pool_init failed, sem_init failed on task semaphore %i\n", errno);
-		if (pthread_mutex_destroy(&pool->tasks_mutex)) {
-			log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
-		}
+		worker_thread_pool_destroy(pool);
 		return 1;
 	}
-	pool->tasks = calloc(queue_size, sizeof(worker_thread_pool_task));
-	pool->next_task = 0;
-	pool->tasks_len = 0;
+	pool->tasks_semaphore_is_init = 1;
 
-	pool->contexts = calloc(num_threads, sizeof(worker_thread_pool_context));
-	pool->threads = calloc(num_threads, sizeof(pthread_t));
+	pool->threads = malloc(num_threads * sizeof(worker_thread_pool_context));
+	memset(pool->threads, 0, num_threads * sizeof(worker_thread_pool_context));
 	for (int i = 0; i < num_threads; i++) {
-		worker_thread_pool_context *context = &pool->contexts[i];
+		worker_thread_pool_context *context = &pool->threads[i];
 		context->pool = pool;
 		context->running = 1;
 		context->id = i;
-		if (pthread_create(&pool->threads[i], NULL, worker_thread_pool_pthread_callback, &pool->contexts[i])) {
+		if (pthread_create(&context->thread, NULL, worker_thread_pool_pthread_callback, context)) {
 			log_error("worker_thread_pool_init failed, pthread_create failed on thread %i\n", i);
-			for (int j = 0; j < i; j++) {
-				pool->contexts[j].running = 0;
-			}
-			for (int j = 0; j < i; j++) {
-				sem_post(&pool->tasks_semaphore);
-				void *result;
-				if (pthread_join(pool->threads[j], &result)) {
-					log_error("worker_thread_pool_init failed, pthread_join failed during shutdown on thread %i\n", j);
-				}
-			}
-			if (pthread_mutex_destroy(&pool->tasks_mutex)) {
-				log_error("worker_thread_pool_init failed, pthread_mutex_destroy failed on task mutex\n");
-			}
-			if (sem_destroy(&pool->tasks_semaphore)) {
-				log_error("worker_thread_pool_init failed, sem_destroy failed on task semaphore\n");
-			}
-			free(pool->tasks);
-			free(pool->contexts);
-			free(pool->threads);
+			worker_thread_pool_destroy(pool);
 			return 1;
 		}
+		context->thread_is_init = 1;
 	}
 	log_trace("worker_thread_pool_init success\n");
 	return 0;
@@ -108,72 +111,119 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 int worker_thread_pool_destroy(worker_thread_pool *pool) {
 	log_trace("worker_thread_pool_destroy start\n");
 	// all threads should be exiting
-	for (int i = 0; i < pool->num_threads; i++) {
-		pool->contexts[i].running = 0;
-	}
-	// wake all threads up
-	for (int i = 0; i < pool->num_threads; i++) {
-		sem_post(&pool->tasks_semaphore);
-	}
-	// wait for all threads to die
-	for (int i = 0; i < pool->num_threads; i++) {
-		void *result;
-		if (pthread_join(pool->threads[i], &result)) {
-			log_error("worker_thread_pool_destroy failed, pthread_join failed during shutdown on thread %i\n", i);
+	if (pool->threads) {
+		for (int i = 0; i < pool->num_threads; i++) {
+			pool->threads[i].running = 0;
 		}
+		// wake all threads up
+		for (int i = 0; i < pool->num_threads; i++) {
+			sem_post(&pool->tasks_semaphore);
+		}
+		// wait for all threads to die
+		for (int i = 0; i < pool->num_threads; i++) {
+			void *result;
+			if (pool->threads[i].thread_is_init && pthread_join(pool->threads[i].thread, &result)) {
+				log_error("worker_thread_pool_destroy failed, pthread_join failed during shutdown on thread %i\n", i);
+			}
+			pool->threads[i].thread_is_init = 0;
+		}
+		free(pool->threads);
+		pool->threads = NULL;
 	}
-	if (pthread_mutex_destroy(&pool->tasks_mutex)) {
-		log_error("worker_thread_pool_destroy failed, pthread_mutex_destroy failed on task mutex\n");
-	}
-	if (sem_destroy(&pool->tasks_semaphore)) {
+	if (pool->tasks_semaphore_is_init && sem_destroy(&pool->tasks_semaphore)) {
 		log_error("worker_thread_pool_destroy failed, sem_destroy failed on task semaphore\n");
 	}
-	free(pool->tasks);
-	free(pool->contexts);
-	free(pool->threads);
+	pool->tasks_semaphore_is_init = 0;
+	if (pool->tasks_mutex_is_init && pthread_mutex_destroy(&pool->tasks_mutex)) {
+		log_error("worker_thread_pool_destroy failed, pthread_mutex_destroy failed on task mutex\n");
+	}
+	pool->tasks_mutex_is_init = 0;
+	for (worker_thread_pool_task *t = pool->task_pool_first; t;) {
+		worker_thread_pool_task *t2 = t;
+		t = t->next;
+		if (sem_destroy(&t2->semaphore)) {
+			log_error("worker_thread_pool_destroy failed, sem_destroy failed on specific task in pool semaphore\n");
+		}
+		free(t2);
+	}
+	pool->task_pool_first = NULL;
+	pool->task_pool_len = 0;
+	for (worker_thread_pool_task *t = pool->task_pending_first; t;) {
+		worker_thread_pool_task *t2 = t;
+		t = t->next;
+		if (sem_destroy(&t2->semaphore)) {
+			log_error("worker_thread_pool_destroy failed, sem_destroy failed on specific task in pending semaphore\n");
+		}
+		free(t2);
+	}
+	pool->task_pending_first = NULL;
+	pool->task_pending_last = NULL;
+	pool->task_pending_len = 0;
 	log_trace("worker_thread_pool_destroy success\n");
 	return 0;
 }
 
 int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result) {
 	log_trace("worker_thread_pool_enqueue start\n");
-	// TODO JEFF this mutex doesn't grab, the worker threads got the mutex but this can't?
 	pthread_mutex_lock(&pool->tasks_mutex);
 
-	if (pool->tasks_len == pool->queue_size) {
-		log_trace("worker_thread_pool_enqueue failed, queue is full\n");
+	// don't let us queue tasks indefinitely
+	// TODO block up to a timeout if queue is full waiting for a previous task to end?
+	if (pool->task_pending_len >= pool->max_queue_size) {
+		log_error("worker_thread_pool_enqueue failed, queue is full\n");
 		pthread_mutex_unlock(&pool->tasks_mutex);
 		return 1;
 	}
 
-	int new_task_index = (pool->next_task + pool->tasks_len) % pool->queue_size;
-	pool->tasks_len++;
-	log_trace("worker_thread_pool_enqueue, new task index %i, new task queue length %i\n", new_task_index, pool->tasks_len);
+	// either we have a task already allocated on the pool, or we need to make a new one
+	worker_thread_pool_task *task;
+	if (pool->task_pool_len == 0) {
+		log_trace("worker_thread_pool_enqueue had empty pool, allocating new task\n");
+		task = malloc(sizeof(worker_thread_pool_task));
+		task->next = NULL;
+		task->data = data;
+		task->result = NULL;
+		if (sem_init(&task->semaphore, 0, 0)) {
+			log_error("worker_thread_pool_enqueue error, sem_init failed\n");
+			free(task);
+			pthread_mutex_unlock(&pool->tasks_mutex);
+			return 1;
+		}
+	} else {
+		task = pool->task_pool_first;
+		pool->task_pool_first = pool->task_pool_first->next;
+		task->next = NULL;
+		pool->task_pool_len--;
+		log_trace("worker_thread_pool_enqueue got task from pool, new pool size %i\n", pool->task_pool_len);
+	}
 
-	worker_thread_pool_task *task = &pool->tasks[new_task_index];
-	task->data = data;
-	task->result = thread_result;
-	task->done = 0;
+	// stick the new task on the end of the queue
+	if (pool->task_pending_len > 0) {
+		pool->task_pending_last->next = task;
+		pool->task_pending_last = task;
+	} else {
+		pool->task_pending_first = task;
+		pool->task_pending_last = task;
+	}
+	pool->task_pending_len++;
+	log_trace("worker_thread_pool_enqueue new task queue length %i\n", pool->task_pending_len);
 
-	// TODO wait until task is complete, new semaphore?
-
-	// while (!task->done) {
-	// 	struct timespec timeout;
-	// 	timespec_get(&timeout, TIME_UTC);
-	// 	// TODO timeout should be a constant
-	// 	timeout.tv_sec += 1;
-	// 	int cond_error = pthread_cond_timedwait(&pool->tasks_condition, &pool->tasks_mutex, &timeout);
-	// 	if (cond_error == ETIMEDOUT) {
-	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait timed out\n");
-	// 	} else if (cond_error) {
-	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait error %i\n", cond_error);
-	// 	} else {
-	// 		log_trace("TODO JEFF worker_thread_pool_enqueue, pthread_cond_timedwait signalled\n");
-	// 	}
-	// 	// TODO if pool has been destroyed abort
-	// }
-
+	// no longer blocking, and wake up a thread
 	pthread_mutex_unlock(&pool->tasks_mutex);
+	sem_post(&pool->tasks_semaphore);
+
+	// wait until we have a result
+	// TODO task can time out?
+	sem_wait(&task->semaphore);
+
+	// task complete, return the pool
+	pthread_mutex_lock(&pool->tasks_mutex);
+	task->next = pool->task_pool_first;
+	pool->task_pool_first = task;
+	pool->task_pool_len++;
+	log_trace("worker_thread_pool_enqueue returned completed task to pool, new pool size %i\n", pool->task_pool_len);
+	pthread_mutex_unlock(&pool->tasks_mutex);
+
 	log_trace("worker_thread_pool_enqueue success\n");
 	return 0;
 }

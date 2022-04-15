@@ -12,37 +12,46 @@ typedef struct worker_thread_pool worker_thread_pool;
 
 typedef struct worker_thread_pool_context {
 	worker_thread_pool *pool;
+	pthread_t thread;
+	int thread_is_init;
 	int running;
 	int id;
 } worker_thread_pool_context;
 
+struct worker_thread_pool_task;
 typedef struct worker_thread_pool_task {
+	struct worker_thread_pool_task *next;
 	// provided by caller
 	void *data;
 	// will be filled in when result is available
 	int *result;
-	int done;
+	// signalled when task completes
+	sem_t semaphore;
 } worker_thread_pool_task;
 
 typedef int (*worker_thread_pool_callback)(int id, void *data);
 
 typedef struct worker_thread_pool {
 	worker_thread_pool_callback callback;
-	int queue_size;
 	int num_threads;
+	int max_queue_size;
 
+	// locking around both the pool and the pending queue
 	pthread_mutex_t tasks_mutex;
-	// the task queue, capcaity = queue_size
-	worker_thread_pool_task *tasks;
-	// the index of the next task that should be dequeued
-	int next_task;
-	// the number of tasks currently enqueued
-	int tasks_len;
-	// signalled when tasks become available
+	int tasks_mutex_is_init;
+	// signalled when tasks become available in the queue
 	sem_t tasks_semaphore;
+	int tasks_semaphore_is_init;
+	// linked lists of tasks
+	// the tasks that have been allocated but aren't in use
+	worker_thread_pool_task *task_pool_first;
+	int task_pool_len;
+	// tasks that are waiting for threads to execute them
+	worker_thread_pool_task *task_pending_first;
+	worker_thread_pool_task *task_pending_last;
+	int task_pending_len;
 
-	worker_thread_pool_context *contexts;
-	pthread_t *threads;
+	worker_thread_pool_context *threads;
 } worker_thread_pool;
 
 /*
@@ -52,7 +61,7 @@ Returns 0 on success, non-0 on failure.
 
 Fails if any of the inputs are invalid. Callback is required, number of threads and queue size must be positive.
 */
-int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callback callback, int num_threads, int queue_size);
+int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callback callback, int num_threads, int max_queue_size);
 
 /*
 Stops all worker threads and waits until all are completed. Frees all resources.
