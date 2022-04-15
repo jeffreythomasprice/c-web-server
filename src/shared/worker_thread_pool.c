@@ -16,15 +16,13 @@ void *worker_thread_pool_pthread_callback(void *data) {
 		timeout.tv_sec += 1;
 		int semaphore_error = sem_timedwait(&context->pool->tasks_semaphore, &timeout);
 		switch (semaphore_error) {
+		// succsss, we were signalled
 		case 0:
-			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, sem_timedwait signalled\n", context->id);
-			break;
+		// timed out
 		case ETIMEDOUT:
-			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, sem_timedwait timed out\n", context->id);
 			break;
 		default:
-			log_trace("TODO JEFF worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id,
-					  semaphore_error);
+			log_error("worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id, semaphore_error);
 		}
 		if (!context->running) {
 			break;
@@ -41,6 +39,8 @@ void *worker_thread_pool_pthread_callback(void *data) {
 			}
 			context->pool->task_pending_len--;
 			log_trace("worker_thread_pool_pthread_callback dequeued task, new task len %i\n", context->pool->task_pending_len);
+
+			// intentionally not blocking the actual callback, that might take a while
 			pthread_mutex_unlock(&context->pool->tasks_mutex);
 
 			// actually do the work
@@ -48,7 +48,22 @@ void *worker_thread_pool_pthread_callback(void *data) {
 			if (task->result) {
 				*task->result = callback_result;
 			}
+
+			// back to working with the task queue and pool
+			pthread_mutex_lock(&context->pool->tasks_mutex);
+
+			// task complete, return the pool
+			task->next = context->pool->task_pool_first;
+			context->pool->task_pool_first = task;
+			context->pool->task_pool_len++;
+			log_trace("worker_thread_pool_pthread_callback returned completed task to pool, new pool size %i\n",
+					  context->pool->task_pool_len);
+
+			// signal completion
 			sem_post(&task->semaphore);
+
+			// really done
+			pthread_mutex_unlock(&context->pool->tasks_mutex);
 		} else {
 			// nothing to do
 			pthread_mutex_unlock(&context->pool->tasks_mutex);
@@ -163,12 +178,19 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 	return 0;
 }
 
-int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result) {
+int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result, worker_thread_pool_enqueue_mode mode) {
 	log_trace("worker_thread_pool_enqueue start\n");
 	pthread_mutex_lock(&pool->tasks_mutex);
 
 	// don't let us queue tasks indefinitely
-	// TODO block up to a timeout if queue is full waiting for a previous task to end?
+	/*
+	TODO handle blocking or not blocking for enqueue
+	if mode == WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT:
+		fail if queue is full
+	else:
+		wait up until timeout for queue to not be full
+		fail if queue is still full after timeout
+	*/
 	if (pool->task_pending_len >= pool->max_queue_size) {
 		log_error("worker_thread_pool_enqueue failed, queue is full\n");
 		pthread_mutex_unlock(&pool->tasks_mutex);
@@ -181,7 +203,6 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 		log_trace("worker_thread_pool_enqueue had empty pool, allocating new task\n");
 		task = malloc(sizeof(worker_thread_pool_task));
 		task->next = NULL;
-		task->data = data;
 		task->result = NULL;
 		if (sem_init(&task->semaphore, 0, 0)) {
 			log_error("worker_thread_pool_enqueue error, sem_init failed\n");
@@ -196,6 +217,10 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 		pool->task_pool_len--;
 		log_trace("worker_thread_pool_enqueue got task from pool, new pool size %i\n", pool->task_pool_len);
 	}
+
+	// data for this task specifically
+	task->data = data;
+	task->result = thread_result;
 
 	// stick the new task on the end of the queue
 	if (pool->task_pending_len > 0) {
@@ -213,16 +238,14 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 	sem_post(&pool->tasks_semaphore);
 
 	// wait until we have a result
-	// TODO task can time out?
+	/*
+	TODO handle blocking or not blocking for completion
+	if mode == WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE:
+		wait for task to be complete
+	else:
+		return immediately
+	*/
 	sem_wait(&task->semaphore);
-
-	// task complete, return the pool
-	pthread_mutex_lock(&pool->tasks_mutex);
-	task->next = pool->task_pool_first;
-	pool->task_pool_first = task;
-	pool->task_pool_len++;
-	log_trace("worker_thread_pool_enqueue returned completed task to pool, new pool size %i\n", pool->task_pool_len);
-	pthread_mutex_unlock(&pool->tasks_mutex);
 
 	log_trace("worker_thread_pool_enqueue success\n");
 	return 0;

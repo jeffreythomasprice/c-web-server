@@ -8,6 +8,12 @@ extern "C" {
 #include <pthread.h>
 #include <semaphore.h>
 
+typedef enum {
+	WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT = 1,
+	WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_ENQUEUE,
+	WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE
+} worker_thread_pool_enqueue_mode;
+
 typedef struct worker_thread_pool worker_thread_pool;
 
 typedef struct worker_thread_pool_context {
@@ -78,8 +84,18 @@ Returns 0 on success, non-0 on failure.
 Fails if the queue is full.
 
 If thread_result is provided and the task completes thread_result is set to the result of the callback.
+
+Mode can specify what operations this blocks on.
+
+WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT means it attempts to add it to the queue, but then returns immediately once it has done so. It does
+not wait for the task to be complete. If the queue is full it errors and does not perform the task.
+
+WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_ENQUEUE means it waits until room is available in the queue. Once it has enqueued the task it returns.
+It does not wait for the task to be complete.
+
+WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE means it waits until room is available in the queue, and for the task to be complete.
 */
-int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result);
+int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result, worker_thread_pool_enqueue_mode mode);
 
 #ifdef __cplusplus
 }
