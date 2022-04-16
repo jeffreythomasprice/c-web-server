@@ -7,12 +7,12 @@ extern "C" {
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdint.h>
 
-typedef enum {
-	WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT = 1,
-	WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_ENQUEUE,
-	WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE
-} worker_thread_pool_enqueue_mode;
+#define WORKER_THREAD_POOL_SUCCESS 0
+#define WORKER_THREAD_POOL_ERROR 1
+#define WORKER_THREAD_POOL_ERROR_QUEUE_FULL 1
+#define WORKER_THREAD_POOL_ERROR_TIMEOUT 2
 
 typedef struct worker_thread_pool worker_thread_pool;
 
@@ -24,21 +24,22 @@ typedef struct worker_thread_pool_context {
 	int id;
 } worker_thread_pool_context;
 
+typedef int (*worker_thread_pool_callback)(int id, void *data);
+
 struct worker_thread_pool_task;
 typedef struct worker_thread_pool_task {
 	struct worker_thread_pool_task *next;
 	// provided by caller
+	worker_thread_pool_callback callback;
 	void *data;
 	// will be filled in when result is available
 	int *result;
 	// signalled when task completes
 	sem_t semaphore;
+	int timedout;
 } worker_thread_pool_task;
 
-typedef int (*worker_thread_pool_callback)(int id, void *data);
-
 typedef struct worker_thread_pool {
-	worker_thread_pool_callback callback;
 	int num_threads;
 	int max_queue_size;
 
@@ -63,39 +64,36 @@ typedef struct worker_thread_pool {
 /*
 Initializes the thread pool with the given number of threads, and with a maximum number of tasks that can be queued at once.
 
-Returns 0 on success, non-0 on failure.
+Returns WORKER_THREAD_POOL_SUCCESS on success, WORKER_THREAD_POOL_ERROR on failure.
 
-Fails if any of the inputs are invalid. Callback is required, number of threads and queue size must be positive.
+Fails if any of the inputs are invalid. Number of threads and queue size must be positive.
 */
-int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callback callback, int num_threads, int max_queue_size);
+int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int max_queue_size);
 
 /*
 Stops all worker threads and waits until all are completed. Frees all resources.
 
-Returns 0 on success, non-0 on failure.
+Returns WORKER_THREAD_POOL_SUCCESS on success, WORKER_THREAD_POOL_ERROR on failure.
 */
 int worker_thread_pool_destroy(worker_thread_pool *pool);
 
 /*
 Enqueues a new job in the queue and blocks until it is complete.
 
-Returns 0 on success, non-0 on failure.
+If callback_result is provided and the task completes it's set to the result of the callback.
 
-Fails if the queue is full.
+timeout of 0 means no timeout, timeout of -1 means infinite timeout.
 
-If thread_result is provided and the task completes thread_result is set to the result of the callback.
+Returns WORKER_THREAD_POOL_SUCCESS on success.
 
-Mode can specify what operations this blocks on.
+Returns WORKER_THREAD_POOL_ERROR_QUEUE_FULL if it can't start the task because the queue is full.
 
-WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT means it attempts to add it to the queue, but then returns immediately once it has done so. It does
-not wait for the task to be complete. If the queue is full it errors and does not perform the task.
+Returns WORKER_THREAD_POOL_ERROR_TIMEOUT if it started the task, but timed out waiting for the result.
 
-WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_ENQUEUE means it waits until room is available in the queue. Once it has enqueued the task it returns.
-It does not wait for the task to be complete.
-
-WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE means it waits until room is available in the queue, and for the task to be complete.
+Returns WORKER_THREAD_POOL_ERROR on all other errors.
 */
-int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result, worker_thread_pool_enqueue_mode mode);
+int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data, int *callback_result,
+							   uint64_t timeout);
 
 #ifdef __cplusplus
 }

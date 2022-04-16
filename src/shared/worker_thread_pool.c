@@ -44,7 +44,7 @@ void *worker_thread_pool_pthread_callback(void *data) {
 			pthread_mutex_unlock(&context->pool->tasks_mutex);
 
 			// actually do the work
-			int callback_result = context->pool->callback(context->id, task->data);
+			int callback_result = task->callback(context->id, task->data);
 			if (task->result) {
 				*task->result = callback_result;
 			}
@@ -73,35 +73,30 @@ void *worker_thread_pool_pthread_callback(void *data) {
 	return NULL;
 }
 
-int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callback callback, int num_threads, int queue_size) {
+int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue_size) {
 	log_trace("worker_thread_pool_init, num_threads=%i, queue_size=%i\n", num_threads, queue_size);
-	if (!callback) {
-		log_error("worker_thread_pool_init failed, no callback\n");
-		return 1;
-	}
 	if (num_threads < 1) {
 		log_error("worker_thread_pool_init failed, num_threads must be positive\n");
-		return 1;
+		return WORKER_THREAD_POOL_ERROR;
 	}
 	if (queue_size < 1) {
 		log_error("worker_thread_pool_init failed, queue_size must be positive\n");
-		return 1;
+		return WORKER_THREAD_POOL_ERROR;
 	}
 	memset(pool, 0, sizeof(worker_thread_pool));
-	pool->callback = callback;
 	pool->num_threads = num_threads;
 	pool->max_queue_size = queue_size;
 
 	if (pthread_mutex_init(&pool->tasks_mutex, NULL)) {
 		log_error("worker_thread_pool_init failed, pthread_mutex_init failed on task mutex\n");
 		worker_thread_pool_destroy(pool);
-		return 1;
+		return WORKER_THREAD_POOL_ERROR;
 	}
 	pool->tasks_mutex_is_init = 1;
 	if (sem_init(&pool->tasks_semaphore, 0, 0)) {
 		log_error("worker_thread_pool_init failed, sem_init failed on task semaphore %i\n", errno);
 		worker_thread_pool_destroy(pool);
-		return 1;
+		return WORKER_THREAD_POOL_ERROR;
 	}
 	pool->tasks_semaphore_is_init = 1;
 
@@ -115,12 +110,12 @@ int worker_thread_pool_init(worker_thread_pool *pool, worker_thread_pool_callbac
 		if (pthread_create(&context->thread, NULL, worker_thread_pool_pthread_callback, context)) {
 			log_error("worker_thread_pool_init failed, pthread_create failed on thread %i\n", i);
 			worker_thread_pool_destroy(pool);
-			return 1;
+			return WORKER_THREAD_POOL_ERROR;
 		}
 		context->thread_is_init = 1;
 	}
 	log_trace("worker_thread_pool_init success\n");
-	return 0;
+	return WORKER_THREAD_POOL_SUCCESS;
 }
 
 int worker_thread_pool_destroy(worker_thread_pool *pool) {
@@ -175,26 +170,23 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 	pool->task_pending_last = NULL;
 	pool->task_pending_len = 0;
 	log_trace("worker_thread_pool_destroy success\n");
-	return 0;
+	return WORKER_THREAD_POOL_SUCCESS;
 }
 
-int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread_result, worker_thread_pool_enqueue_mode mode) {
+int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data, int *callback_result,
+							   uint64_t timeout) {
 	log_trace("worker_thread_pool_enqueue start\n");
+	if (!callback) {
+		log_error("worker_thread_pool_enqueue failed, callback is required\n");
+		return WORKER_THREAD_POOL_ERROR;
+	}
 	pthread_mutex_lock(&pool->tasks_mutex);
 
-	// don't let us queue tasks indefinitely
-	/*
-	TODO handle blocking or not blocking for enqueue
-	if mode == WORKER_THREAD_POOL_ENQUEUE_MODE_NO_WAIT:
-		fail if queue is full
-	else:
-		wait up until timeout for queue to not be full
-		fail if queue is still full after timeout
-	*/
+	// add to the queue, fail if queue is full
 	if (pool->task_pending_len >= pool->max_queue_size) {
 		log_error("worker_thread_pool_enqueue failed, queue is full\n");
 		pthread_mutex_unlock(&pool->tasks_mutex);
-		return 1;
+		return WORKER_THREAD_POOL_ERROR_QUEUE_FULL;
 	}
 
 	// either we have a task already allocated on the pool, or we need to make a new one
@@ -208,7 +200,7 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 			log_error("worker_thread_pool_enqueue error, sem_init failed\n");
 			free(task);
 			pthread_mutex_unlock(&pool->tasks_mutex);
-			return 1;
+			return WORKER_THREAD_POOL_ERROR;
 		}
 	} else {
 		task = pool->task_pool_first;
@@ -219,8 +211,9 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 	}
 
 	// data for this task specifically
+	task->callback = callback;
 	task->data = data;
-	task->result = thread_result;
+	task->result = callback_result;
 
 	// stick the new task on the end of the queue
 	if (pool->task_pending_len > 0) {
@@ -238,15 +231,31 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, void *data, int *thread
 	sem_post(&pool->tasks_semaphore);
 
 	// wait until we have a result
-	/*
-	TODO handle blocking or not blocking for completion
-	if mode == WORKER_THREAD_POOL_ENQUEUE_MODE_WAIT_COMPLETE:
-		wait for task to be complete
-	else:
-		return immediately
-	*/
-	sem_wait(&task->semaphore);
+	if (timeout == -1) {
+		log_trace("worker_thread_pool_enqueue waiting forever\n");
+		sem_wait(&task->semaphore);
+	} else if (timeout == 0) {
+		log_trace("worker_thread_pool_enqueue not waiting\n");
+	} else {
+		log_trace("worker_thread_pool_enqueue waiting %lu\n", timeout);
+		struct timespec ts_timeout;
+		timespec_get(&ts_timeout, TIME_UTC);
+		ts_timeout.tv_sec += timeout / 1000000000;
+		ts_timeout.tv_nsec += timeout - ts_timeout.tv_sec * 1000000000;
+		int wait_error = sem_timedwait(&task->semaphore, &ts_timeout);
+		switch (wait_error) {
+		case 0:
+			break;
+		case ETIMEDOUT:
+			// make sure the other thread knows not to write to this, caller might have made this pointer invalid
+			task->result = NULL;
+			log_error("worker_thread_pool_enqueue failed, task timed out\n");
+			return WORKER_THREAD_POOL_ERROR_TIMEOUT;
+		default:
+			log_error("worker_thread_pool_enqueue failed, sem_timedwait failed %i\n", wait_error);
+		}
+	}
 
 	log_trace("worker_thread_pool_enqueue success\n");
-	return 0;
+	return WORKER_THREAD_POOL_SUCCESS;
 }
