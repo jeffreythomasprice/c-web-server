@@ -1,6 +1,9 @@
+#include <arpa/inet.h>
+#include <errno.h>
 #include <getopt.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -13,8 +16,10 @@
 #define DEFAULT_WORKER_POOL_SIZE 2
 
 typedef struct {
-	int unused;
+	int socket;
 } http_worker_task_data;
+
+int shutdown_requested;
 
 void usage(char *name) {
 	printf("usage:\n");
@@ -23,6 +28,17 @@ void usage(char *name) {
 	printf("        display help text\n");
 	printf("    -p, --port PORT\n");
 	printf("        Listen on this port\n");
+}
+
+void signal_handler(int signum) {
+	switch (signum) {
+	case SIGINT:
+		log_debug("stop requested\n");
+		shutdown_requested = 1;
+		break;
+	default:
+		log_error("unrecognized signal %i\n", signum);
+	}
 }
 
 int http_worker_task(void *data) {
@@ -48,27 +64,26 @@ int main(int argc, char **argv) {
 		}
 		if ((c == 0 && option_index == 0) || c == 'h') {
 			usage(argv[0]);
-			exit(0);
+			return 0;
 		}
 		if ((c == 0 && option_index == 1) || c == 'p') {
 			if (!optarg) {
-				exit(1);
+				return 1;
 			}
 			if (sscanf(optarg, "%i", &port) != 1) {
 				log_error("failed to parse port: %s\n", optarg);
-				exit(1);
+				return 1;
 			}
 			continue;
 		}
 		log_error("unrecognized arg: %s\n", argv[optind - 1]);
 		usage(argv[0]);
-		exit(1);
-		break;
+		return 1;
 	}
 	if (optind < argc) {
 		log_error("unrecognized arg: %s\n", argv[optind]);
 		usage(argv[0]);
-		exit(1);
+		return 1;
 	}
 
 	int return_value = 0;
@@ -111,7 +126,43 @@ int main(int argc, char **argv) {
 	}
 	http_worker_pool_needs_destroy = 1;
 
-	log_debug("TODO JEFF listen to socket\n");
+	shutdown_requested = 0;
+	signal(SIGINT, signal_handler);
+	log_debug("waiting for requests on port %i\n", port);
+	while (!shutdown_requested) {
+		// accept new incoming connection
+		struct sockaddr_in request_address;
+		socklen_t request_address_len = sizeof(struct sockaddr_in);
+		// TODO JEFF figure out how to do timeout on accept, otherwise we can't signal this
+		int request_socket = accept(socket_handle, (struct sockaddr *)&request_address, &request_address_len);
+
+		// some basic error checking
+		if (request_socket == -1) {
+			log_error("accepting incoming connection failed with %i\n", errno);
+			continue;
+		}
+		if (request_address.sin_family == AF_INET6) {
+			log_error("IPv6 unsupported\n");
+			close(request_socket);
+			continue;
+		}
+		if (request_address.sin_family != AF_INET) {
+			log_error("unrecognized address family %i\n", request_address.sin_family);
+			close(request_socket);
+			continue;
+		}
+
+		char request_address_str[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &request_address.sin_addr, request_address_str, INET_ADDRSTRLEN);
+		log_trace("incoming request from %s:%i\n", request_address_str, ntohs(request_address.sin_port));
+
+		// TODO JEFF should be launching new task
+		close(request_socket);
+
+		// TODO JEFF for testing purposes only
+		log_debug("TODO JEFF main loop...\n");
+		usleep(1000000llu);
+	}
 
 DONE:
 	if (http_worker_pool_needs_destroy) {
