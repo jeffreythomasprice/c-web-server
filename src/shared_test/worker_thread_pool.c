@@ -21,10 +21,10 @@ int callback(int id, void *data) {
 	task_data *d = data;
 	printf("task executing on worker %i, a=%i, b=%i\n", id, d->a, d->b);
 	fflush(stdout);
-	d->result = d->a + d->b;
 	if (d->sleep) {
 		usleep(d->sleep);
 	}
+	d->result = d->a + d->b;
 	if (d->semaphore) {
 		sem_post(d->semaphore);
 	}
@@ -108,19 +108,33 @@ void test_enqueue_task_times_out(worker_thread_pool *pool) {
 	d.a = rand();
 	d.b = rand();
 	// 1 second in microseconds
-	d.sleep = 1000000;
+	d.sleep = 1000000ull;
+	d.semaphore = &semaphore;
 	int expected = d.a + d.b;
 	int task_result = 42;
+	// going to be comparing times to make sure it really waited
+	struct timespec ts1;
+	timespec_get(&ts1, TIME_UTC);
 	// timeout is 0.5 seconds in nanoseconds
-	int enqueue_result = worker_thread_pool_enqueue(pool, callback, &d, &task_result, 500000000);
-	// TODO assert it's at least half a second later?
+	int enqueue_result = worker_thread_pool_enqueue(pool, callback, &d, &task_result, 500000000ull);
+	// assert that we waited
+	struct timespec ts2;
+	timespec_get(&ts2, TIME_UTC);
+	int64_t wait_time = (ts2.tv_sec - ts1.tv_sec) * 1000000000ll + (ts2.tv_nsec - ts1.tv_nsec);
+	assert(wait_time > 500000000ll);
 	assert(enqueue_result == WORKER_THREAD_POOL_ERROR_TIMEOUT);
 	// i.e. it's not been set to 0 because the task hasn't completed yet
 	assert(task_result == 42);
 	// still 0 because the callback hasn't fired
 	assert(d.result == 0);
+	fflush(stdout);
 	sem_wait(&semaphore);
-	// TODO assert it's at least 1 second later?
+	fflush(stdout);
+	// assert that after the full delay the task actually copmletes
+	struct timespec ts3;
+	timespec_get(&ts3, TIME_UTC);
+	int64_t complete_time = (ts3.tv_sec - ts1.tv_sec) * 1000000000ll + (ts3.tv_nsec - ts1.tv_nsec);
+	assert(complete_time > 1000000000ll);
 	// i.e. it's still not been set to 0 because the task knows it timed out and can't touch this pointer
 	assert(task_result == 42);
 	// callback did execute though, so it set the result

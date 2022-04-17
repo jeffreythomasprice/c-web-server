@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,64 +11,76 @@ void *worker_thread_pool_pthread_callback(void *data) {
 	worker_thread_pool_context *context = data;
 	log_trace("worker_thread_pool_pthread_callback start, thread id %i\n", context->id);
 	while (context->running) {
-		struct timespec timeout;
-		timespec_get(&timeout, TIME_UTC);
-		// TODO timeout should be a constant
-		timeout.tv_sec += 1;
-		int semaphore_error = sem_timedwait(&context->pool->tasks_semaphore, &timeout);
-		switch (semaphore_error) {
-		// succsss, we were signalled
-		case 0:
-		// timed out
-		case ETIMEDOUT:
-			break;
-		default:
-			log_error("worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id, semaphore_error);
-		}
-		if (!context->running) {
-			break;
-		}
-
-		// if work is in the queue dequeue an element and execute it
+		// if there are no tasks to do sleep until signalled
 		pthread_mutex_lock(&context->pool->tasks_mutex);
-		if (context->pool->task_pending_len > 0) {
-			// get the next task from the queue
-			worker_thread_pool_task *task = context->pool->task_pending_first;
-			context->pool->task_pending_first = context->pool->task_pending_first->next;
-			if (!context->pool->task_pending_first) {
-				context->pool->task_pending_last = NULL;
-			}
-			context->pool->task_pending_len--;
-			log_trace("worker_thread_pool_pthread_callback dequeued task, new task len %i\n", context->pool->task_pending_len);
-
-			// intentionally not blocking the actual callback, that might take a while
+		if (context->pool->task_pending_len == 0) {
 			pthread_mutex_unlock(&context->pool->tasks_mutex);
-
-			// actually do the work
-			int callback_result = task->callback(context->id, task->data);
-			if (task->result) {
-				*task->result = callback_result;
+			struct timespec timeout;
+			timespec_get(&timeout, TIME_UTC);
+			timeout.tv_sec += 5;
+			int semaphore_error;
+			if (sem_timedwait(&context->pool->tasks_semaphore, &timeout)) {
+				semaphore_error = errno;
 			}
-
-			// back to working with the task queue and pool
+			switch (semaphore_error) {
+			// succsss, we were signalled
+			case 0:
+			// timed out
+			case ETIMEDOUT:
+				break;
+			default:
+				log_error("worker_thread_pool_pthread_callback, thread id %i, pthread_cond_timedwait error %i\n", context->id,
+						  semaphore_error);
+			}
+			// we're trying to shut down so just abort
+			if (!context->running) {
+				break;
+			}
 			pthread_mutex_lock(&context->pool->tasks_mutex);
+		}
 
-			// task complete, return the pool
+		// if after waiting there is still no work to do just keep going, some other thread got there first
+		if (context->pool->task_pending_len == 0) {
+			pthread_mutex_unlock(&context->pool->tasks_mutex);
+			continue;
+		}
+
+		// get the next task from the queue
+		worker_thread_pool_task *task = context->pool->task_pending_first;
+		context->pool->task_pending_first = context->pool->task_pending_first->next;
+		if (!context->pool->task_pending_first) {
+			context->pool->task_pending_last = NULL;
+		}
+		context->pool->task_pending_len--;
+		log_trace("worker_thread_pool_pthread_callback dequeued task, new task len %i\n", context->pool->task_pending_len);
+
+		// intentionally not blocking the actual callback, that might take a while
+		pthread_mutex_unlock(&context->pool->tasks_mutex);
+
+		// actually do the work
+		int callback_result = task->callback(context->id, task->data);
+		if (task->result) {
+			*task->result = callback_result;
+		}
+
+		// back to working with the task queue and pool
+		pthread_mutex_lock(&context->pool->tasks_mutex);
+
+		// if we've timed out then we're responsible for adding this back to the pool
+		// if we didn't time out then we should signal our main thread that we're done
+		if (task->timedout) {
 			task->next = context->pool->task_pool_first;
 			context->pool->task_pool_first = task;
 			context->pool->task_pool_len++;
-			log_trace("worker_thread_pool_pthread_callback returned completed task to pool, new pool size %i\n",
+			log_trace("worker_thread_pool_pthread_callback task timed out, returned completed task to pool, new pool size %i\n",
 					  context->pool->task_pool_len);
-
-			// signal completion
-			sem_post(&task->semaphore);
-
-			// really done
-			pthread_mutex_unlock(&context->pool->tasks_mutex);
 		} else {
-			// nothing to do
-			pthread_mutex_unlock(&context->pool->tasks_mutex);
+			log_trace("worker_thread_pool_pthread_callback task completed successfully, signalling\n");
+			task->completed = 1;
+			sem_post(&task->semaphore);
 		}
+
+		pthread_mutex_unlock(&context->pool->tasks_mutex);
 	}
 	log_trace("worker_thread_pool_pthread_callback done, thread id %i\n", context->id);
 	return NULL;
@@ -214,6 +227,8 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_call
 	task->callback = callback;
 	task->data = data;
 	task->result = callback_result;
+	task->timedout = 0;
+	task->completed = 0;
 
 	// stick the new task on the end of the queue
 	if (pool->task_pending_len > 0) {
@@ -240,19 +255,45 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_call
 		log_trace("worker_thread_pool_enqueue waiting %lu\n", timeout);
 		struct timespec ts_timeout;
 		timespec_get(&ts_timeout, TIME_UTC);
-		ts_timeout.tv_sec += timeout / 1000000000;
-		ts_timeout.tv_nsec += timeout - ts_timeout.tv_sec * 1000000000;
-		int wait_error = sem_timedwait(&task->semaphore, &ts_timeout);
-		switch (wait_error) {
-		case 0:
-			break;
-		case ETIMEDOUT:
-			// make sure the other thread knows not to write to this, caller might have made this pointer invalid
+		ts_timeout.tv_nsec += timeout;
+		ts_timeout.tv_sec += ts_timeout.tv_nsec / 1000000000ull;
+		ts_timeout.tv_nsec = ts_timeout.tv_nsec % 1000000000ull;
+		int wait_error = 0;
+		if (sem_timedwait(&task->semaphore, &ts_timeout)) {
+			wait_error = errno;
+		}
+		timespec_get(&ts_timeout, TIME_UTC);
+		pthread_mutex_lock(&pool->tasks_mutex);
+		int exit_with_error;
+		int add_task_back_to_pool;
+		if (task->completed) {
+			log_trace("worker_thread_pool_enqueue is done waiting, but task is marked as completed so ignoring timeout\n");
+			exit_with_error = 0;
+			add_task_back_to_pool = 0;
+		} else if (wait_error == 0) {
+			exit_with_error = 0;
+			add_task_back_to_pool = 1;
+		} else if (wait_error == ETIMEDOUT) {
+			// result pointer may now be invalid, the caller moved on
 			task->result = NULL;
+			task->timedout = 1;
 			log_error("worker_thread_pool_enqueue failed, task timed out\n");
-			return WORKER_THREAD_POOL_ERROR_TIMEOUT;
-		default:
+			exit_with_error = WORKER_THREAD_POOL_ERROR_TIMEOUT;
+			add_task_back_to_pool = 0;
+		} else {
 			log_error("worker_thread_pool_enqueue failed, sem_timedwait failed %i\n", wait_error);
+			exit_with_error = WORKER_THREAD_POOL_ERROR;
+			add_task_back_to_pool = 1;
+		}
+		if (add_task_back_to_pool) {
+			task->next = pool->task_pool_first;
+			pool->task_pool_first = task;
+			pool->task_pool_len++;
+			log_trace("worker_thread_pool_enqueue, returned timed out task to pool, new pool size %i\n", pool->task_pool_len);
+		}
+		pthread_mutex_unlock(&pool->tasks_mutex);
+		if (exit_with_error) {
+			return exit_with_error;
 		}
 	}
 

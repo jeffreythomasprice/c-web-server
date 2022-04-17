@@ -36,7 +36,10 @@ typedef struct worker_thread_pool_task {
 	int *result;
 	// signalled when task completes
 	sem_t semaphore;
+	// set to true if the task times out
 	int timedout;
+	// set to true when the task completes
+	int completed;
 } worker_thread_pool_task;
 
 typedef struct worker_thread_pool {

@@ -3,6 +3,8 @@
 		"build": true
 	},
 	"files.associations": {
-		"functional": "c"
+		"functional": "c",
+		"pthread.h": "c",
+		"stdint.h": "c"
 	}
 }

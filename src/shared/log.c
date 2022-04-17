@@ -3,6 +3,8 @@
 
 #include "log.h"
 
+// TODO needs sync around logging
+
 void log_trace(char *format, ...) {
 	va_list args;
 	va_start(args, format);
