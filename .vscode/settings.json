@@ -9,6 +9,9 @@
 		"array": "c",
 		"string": "c",
 		"string_view": "c",
-		"sstream": "c"
+		"sstream": "c",
+		"tcp_socket_wrapper.h": "c",
+		"worker_thread_pool.h": "c",
+		"unistd.h": "c"
 	}
 }
