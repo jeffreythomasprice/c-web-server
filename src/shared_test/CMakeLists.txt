@@ -4,7 +4,11 @@ add_executable(test_base64 base64.c)
 target_link_libraries(test_base64 shared)
 add_test(NAME test_base64 COMMAND test_base64)
 
+add_executable(test_tcp_socket_wrapper tcp_socket_wrapper.c)
+target_link_libraries(test_tcp_socket_wrapper shared)
+target_link_libraries(test_tcp_socket_wrapper shared pthread)
+add_test(NAME test_tcp_socket_wrapper COMMAND test_tcp_socket_wrapper)
+
 add_executable(test_worker_thread_pool worker_thread_pool.c)
-target_link_libraries(test_worker_thread_pool shared)
+target_link_libraries(test_worker_thread_pool shared pthread)
 add_test(NAME test_worker_thread_pool COMMAND test_worker_thread_pool)
-target_link_libraries(test_worker_thread_pool pthread)

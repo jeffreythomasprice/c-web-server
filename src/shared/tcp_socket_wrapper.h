@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// TODO JEFF write a unit test for this
+#include <pthread.h>
 
 /**
  * s is a socket handle that came from accept
