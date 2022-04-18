@@ -41,21 +41,21 @@ void *tcp_socket_wrapper_thread(void *data) {
 		// accept new incoming connection
 		struct sockaddr_in request_address;
 		socklen_t request_address_len = sizeof(struct sockaddr_in);
-		int request_socket = accept(sock_wrap->socket, (struct sockaddr *)&request_address, &request_address_len);
+		int accepted_socket = accept(sock_wrap->socket, (struct sockaddr *)&request_address, &request_address_len);
 
 		// some basic error checking
-		if (request_socket == -1) {
+		if (accepted_socket == -1) {
 			log_error("accepting incoming connection failed with %i\n", errno);
 			continue;
 		}
 		if (request_address.sin_family == AF_INET6) {
 			log_error("IPv6 unsupported\n");
-			close(request_socket);
+			close(accepted_socket);
 			continue;
 		}
 		if (request_address.sin_family != AF_INET) {
 			log_error("unrecognized address family %i\n", request_address.sin_family);
-			close(request_socket);
+			close(accepted_socket);
 			continue;
 		}
 
@@ -63,15 +63,14 @@ void *tcp_socket_wrapper_thread(void *data) {
 		inet_ntop(AF_INET, &request_address.sin_addr, request_address_str, INET_ADDRSTRLEN);
 		log_trace("incoming request from %s:%i\n", request_address_str, ntohs(request_address.sin_port));
 
-		// TODO JEFF should be giving socket to callback
-		close(request_socket);
+		sock_wrap->callback(accepted_socket);
 	}
 
 	log_trace("tcp_socket_wrapper_thread done");
 	return NULL;
 }
 
-int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port) {
+int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback) {
 	memset(sock_wrap, 0, sizeof(tcp_socket_wrapper));
 
 	struct sockaddr_in addr;
@@ -85,6 +84,12 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 		return 1;
 	}
 	addr.sin_port = htons(port);
+
+	if (!callback) {
+		log_error("tcp_socket_wrapper_init failed, callback is required\n");
+		return 1;
+	}
+	sock_wrap->callback = callback;
 
 	sock_wrap->socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (!sock_wrap->socket) {

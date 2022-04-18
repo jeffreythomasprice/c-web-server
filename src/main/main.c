@@ -36,6 +36,11 @@ void signal_handler(int signum) {
 	}
 }
 
+void socket_accept(int s) {
+	log_trace("TODO JEFF actually hand this off to a thread pool %i\n", s);
+	close(s);
+}
+
 int main(int argc, char **argv) {
 	// parsing options
 
@@ -83,7 +88,7 @@ int main(int argc, char **argv) {
 	}
 
 	tcp_socket_wrapper sock_wrap;
-	if (tcp_socket_wrapper_init(&sock_wrap, NULL, port)) {
+	if (tcp_socket_wrapper_init(&sock_wrap, NULL, port, socket_accept)) {
 		log_error("failed to make socket\n");
 		worker_thread_pool_destroy(&http_worker_pool);
 		return 1;
