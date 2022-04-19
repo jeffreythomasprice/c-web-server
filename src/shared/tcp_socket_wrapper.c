@@ -3,6 +3,7 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <pthread.h>
@@ -10,8 +11,6 @@
 #include "tcp_socket_wrapper.h"
 
 #include "../shared/log.h"
-
-#define TCP_SOCKET_WRAPPER_MAX_PENDING_CONNECTIONS 10
 
 void *tcp_socket_wrapper_thread(void *data) {
 	log_trace("tcp_socket_wrapper_thread start\n");
@@ -23,9 +22,9 @@ void *tcp_socket_wrapper_thread(void *data) {
 		FD_ZERO(&socket_fd_set);
 		FD_SET(sock_wrap->socket, &socket_fd_set);
 		struct timeval socket_select_timeout;
-		// TODO socket select timeout should be a constant
+		// 500 ms
 		socket_select_timeout.tv_sec = 0;
-		socket_select_timeout.tv_usec = 500;
+		socket_select_timeout.tv_usec = 500000ull;
 		int select_result = select(sock_wrap->socket + 1, &socket_fd_set, NULL, NULL, &socket_select_timeout);
 		if (select_result < 0) {
 			log_error("tcp_socket_wrapper_thread failed, error waiting on select\n");
@@ -92,20 +91,19 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 	sock_wrap->callback = callback;
 
 	sock_wrap->socket = socket(AF_INET, SOCK_STREAM, 0);
-	if (!sock_wrap->socket) {
-		log_error("tcp_socket_wrapper_init failed, error creating socket\n");
+	if (sock_wrap->socket == -1) {
+		log_error("tcp_socket_wrapper_init failed, error creating socket, %s\n", strerror(errno));
 		return 1;
 	}
 	if (bind(sock_wrap->socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		// TODO check errno
-		log_error("tcp_socket_wrapper_init failed, failed to bind socket to port %i\n", port);
+		log_error("tcp_socket_wrapper_init failed, failed to bind socket to port %i, %s\n", port, strerror(errno));
 		close(sock_wrap->socket);
 		sock_wrap->socket = 0;
 		return 1;
 	}
-	if (listen(sock_wrap->socket, TCP_SOCKET_WRAPPER_MAX_PENDING_CONNECTIONS) < 0) {
-		// TODO check errno
-		log_error("tcp_socket_wrapper_init failed, failed to listen on socket\n");
+	// 2nd arg is number of connections that can be blocked waiting for the next accept
+	if (listen(sock_wrap->socket, 10) < 0) {
+		log_error("tcp_socket_wrapper_init failed, failed to listen on socket, %s\n", strerror(errno));
 		close(sock_wrap->socket);
 		sock_wrap->socket = 0;
 		return 1;

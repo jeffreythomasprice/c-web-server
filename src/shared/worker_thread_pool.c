@@ -262,7 +262,6 @@ int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_call
 		if (sem_timedwait(&task->semaphore, &ts_timeout)) {
 			wait_error = errno;
 		}
-		timespec_get(&ts_timeout, TIME_UTC);
 		pthread_mutex_lock(&pool->tasks_mutex);
 		int exit_with_error;
 		int add_task_back_to_pool;
