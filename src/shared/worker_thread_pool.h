@@ -85,7 +85,7 @@ Enqueues a new job in the queue and blocks until it is complete.
 
 If callback_result is provided and the task completes it's set to the result of the callback.
 
-timeout of 0 means no timeout, timeout of -1 means infinite timeout.
+timeout is given in nanoseconds. A value of 0 means no timeout, timeout of -1 means infinite timeout.
 
 Returns WORKER_THREAD_POOL_SUCCESS on success.
 

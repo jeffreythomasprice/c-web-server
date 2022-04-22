@@ -179,9 +179,6 @@ int main() {
 		return 1;
 	}
 
-	// TODO JEFF no need for sleep to wait for sock wrapper to start?
-	usleep(500000);
-
 	assert(send_test_data() == 0);
 
 	if (tcp_socket_wrapper_destroy(&sock_wrap)) {

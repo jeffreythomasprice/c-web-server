@@ -65,7 +65,7 @@ void *tcp_socket_wrapper_thread(void *data) {
 		sock_wrap->callback(accepted_socket);
 	}
 
-	log_trace("tcp_socket_wrapper_thread done");
+	log_trace("tcp_socket_wrapper_thread done\n");
 	return NULL;
 }
 
@@ -130,7 +130,7 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 }
 
 int tcp_socket_wrapper_destroy(tcp_socket_wrapper *sock_wrap) {
-	log_trace("tcp_socket_wrapper_destroy start");
+	log_trace("tcp_socket_wrapper_destroy start\n");
 	sock_wrap->running = 0;
 	void *result;
 	if (sock_wrap->thread_is_init && pthread_join(sock_wrap->thread, &result)) {
@@ -140,6 +140,6 @@ int tcp_socket_wrapper_destroy(tcp_socket_wrapper *sock_wrap) {
 		close(sock_wrap->socket);
 		sock_wrap->socket = 0;
 	}
-	log_trace("tcp_socket_wrapper_destroy success");
+	log_trace("tcp_socket_wrapper_destroy success\n");
 	return 0;
 }
