@@ -95,6 +95,13 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 		log_error("tcp_socket_wrapper_init failed, error creating socket, %s\n", strerror(errno));
 		return 1;
 	}
+	int option = 1;
+	if (setsockopt(sock_wrap->socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
+		log_error("tcp_socket_wrapper_init failed, failed to set socket options %s\n", strerror(errno));
+		close(sock_wrap->socket);
+		sock_wrap->socket = 0;
+		return 1;
+	}
 	if (bind(sock_wrap->socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		log_error("tcp_socket_wrapper_init failed, failed to bind socket to port %i, %s\n", port, strerror(errno));
 		close(sock_wrap->socket);

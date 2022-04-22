@@ -82,8 +82,10 @@ int send_test_data() {
 	uint16_t test_data_len = rand() % 1000 + 1000;
 	log_trace("generating %i bytes of test data\n", (int)test_data_len);
 	uint8_t *test_data = malloc(test_data_len);
+	uint8_t *expected_response_data = malloc(test_data_len);
 	for (int i = 0; i < test_data_len; i++) {
 		test_data[i] = rand() % 256;
+		expected_response_data[i] = test_data[i] + 1;
 	}
 
 	int s = socket(AF_INET, SOCK_STREAM, 0);
@@ -159,11 +161,12 @@ int send_test_data() {
 	}
 
 	assert(receive_len == test_data_len);
-	assert(!memcmp(receive_data, test_data, test_data_len));
+	assert(!memcmp(receive_data, expected_response_data, test_data_len));
 
 	free(receive_data);
 	close(s);
 	free(test_data);
+	free(expected_response_data);
 	return 0;
 }
 
