@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
@@ -11,6 +12,9 @@
 
 #define DEFAULT_PORT 8000
 #define DEFAULT_WORKER_POOL_SIZE 2
+
+#define CHUNK_READ_SIZE 1024
+#define MAX_SOCKET_READ_SIZE_IN_CHUNKS 64
 
 typedef struct {
 	int socket;
@@ -42,16 +46,36 @@ void signal_handler(int signum) {
 int http_task(int id, void *d) {
 	http_worker_task_data *data = d;
 
-	log_trace("TODO JEFF read and handle http request\n");
-	const size_t bufferLen = 1024;
-	uint8_t *buffer = malloc(bufferLen);
-	memset(buffer, 0, bufferLen);
-	size_t len = read(data->socket, buffer, bufferLen);
-	log_debug("TODO JEFF read some data from the request, treating as ascii:\n%s\n", buffer);
-	free(buffer);
+	size_t bufferCapacity = CHUNK_READ_SIZE;
+	uint8_t *buffer = malloc(bufferCapacity);
+	size_t bufferLength = 0;
+	// use max size -1 because we're going to want to put a terminating 0
+	while (bufferLength < MAX_SOCKET_READ_SIZE_IN_CHUNKS * CHUNK_READ_SIZE - 1) {
+		log_trace("TODO JEFF bufferLength: %i, bufferCapacity: %i\n", (int)bufferLength, (int)bufferCapacity);
+		size_t result = read(data->socket, buffer + bufferLength, bufferCapacity - bufferLength);
+		log_trace("TODO JEFF read result %i\n", result);
+		if (result < 0) {
+			log_error("http_task failed, error reading from socket %s\n", strerror(errno));
+			// TODO respond to socket with a failure
+			free(buffer);
+			close(data->socket);
+			return 1;
+		}
+		if (result == 0) {
+			break;
+		}
+		bufferLength += result;
+		if (bufferCapacity - bufferLength < CHUNK_READ_SIZE) {
+			bufferCapacity += CHUNK_READ_SIZE;
+			buffer = realloc(buffer, bufferCapacity);
+		}
+	}
+	buffer[bufferLength] = 0;
 
+	log_trace("http_task received payload of length %lu bytes\n%s\n", bufferLength, buffer);
+
+	free(buffer);
 	close(data->socket);
-	free(data);
 	return 0;
 }
 
