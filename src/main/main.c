@@ -24,7 +24,7 @@ typedef struct {
 // TODO break headers out into their own file
 typedef struct {
 	char *name;
-	size_t valuesLen;
+	size_t values_len;
 	char **values;
 } http_header;
 
@@ -42,7 +42,7 @@ void http_header_init(http_header *header, char *name, size_t nameLen) {
 	header->name = malloc(nameLen + 1);
 	memcpy(header->name, name, nameLen);
 	header->name[nameLen] = 0;
-	header->valuesLen = 0;
+	header->values_len = 0;
 	header->values = NULL;
 }
 
@@ -56,10 +56,10 @@ void http_header_append(http_header *header, char *values, size_t valuesLen) {
 	size_t i;
 	for (i = 0; i < valuesLen; i++) {
 		if (values[i] == ',') {
-			header->valuesLen++;
-			header->values = realloc(header->values, sizeof(char *) * header->valuesLen);
+			header->values_len++;
+			header->values = realloc(header->values, sizeof(char *) * header->values_len);
 			size_t thisValueLen = i - last;
-			char **thisValue = &header->values[header->valuesLen - 1];
+			char **thisValue = &header->values[header->values_len - 1];
 			*thisValue = malloc(thisValueLen + 1);
 			memcpy(*thisValue, values + last, thisValueLen);
 			(*thisValue)[thisValueLen] = 0;
@@ -70,10 +70,10 @@ void http_header_append(http_header *header, char *values, size_t valuesLen) {
 		}
 	}
 	if (i > last) {
-		header->valuesLen++;
-		header->values = realloc(header->values, sizeof(char *) * header->valuesLen);
+		header->values_len++;
+		header->values = realloc(header->values, sizeof(char *) * header->values_len);
 		size_t thisValueLen = i - last;
-		char **thisValue = &header->values[header->valuesLen - 1];
+		char **thisValue = &header->values[header->values_len - 1];
 		*thisValue = malloc(thisValueLen + 1);
 		memcpy(*thisValue, values + last, thisValueLen);
 		(*thisValue)[thisValueLen] = 0;
@@ -82,8 +82,8 @@ void http_header_append(http_header *header, char *values, size_t valuesLen) {
 
 void http_header_dealloc(http_header *header) {
 	free(header->name);
-	if (header->valuesLen > 0) {
-		for (size_t i = 0; i < header->valuesLen; i++) {
+	if (header->values_len > 0) {
+		for (size_t i = 0; i < header->values_len; i++) {
 			free(header->values[i]);
 		}
 		free(header->values);
@@ -143,19 +143,20 @@ void signal_handler(int signum) {
 int http_task(int id, void *d) {
 	http_worker_task_data *data = d;
 
-	size_t bufferCapacity = CHUNK_READ_SIZE;
-	uint8_t *buffer = malloc(bufferCapacity);
-	size_t bufferLength = 0;
+	size_t buffer_capacity = CHUNK_READ_SIZE;
+	uint8_t *buffer = malloc(buffer_capacity);
+	size_t buffer_length = 0;
 
-	// going to be looking for the end of the headers block
-	// headers are separated from any body by an empty line, so we can look for a pair of new lines in a row
-	size_t lastChecked = 0;
-	size_t endOfRequestLine = -1;
-	size_t endOfHeader = -1;
+	size_t end_of_last_line = 0;
+	int found_request_line = 0;
+	int found_end_of_header = 0;
+	http_headers headers;
+	http_headers_init(&headers);
+	size_t start_of_body;
 
 	// use max size -1 because we're going to want to put a terminating 0
-	while (bufferLength < MAX_SOCKET_READ_SIZE_IN_CHUNKS * CHUNK_READ_SIZE - 1) {
-		size_t result = read(data->socket, buffer + bufferLength, bufferCapacity - bufferLength);
+	while (buffer_length < MAX_SOCKET_READ_SIZE_IN_CHUNKS * CHUNK_READ_SIZE - 1) {
+		size_t result = read(data->socket, buffer + buffer_length, buffer_capacity - buffer_length);
 		if (result < 0) {
 			log_error("http_task failed, error reading from socket %s\n", strerror(errno));
 			// TODO respond to socket with a failure
@@ -166,117 +167,76 @@ int http_task(int id, void *d) {
 		if (result == 0) {
 			break;
 		}
-		bufferLength += result;
-		if (bufferCapacity - bufferLength < CHUNK_READ_SIZE) {
-			bufferCapacity += CHUNK_READ_SIZE;
-			buffer = realloc(buffer, bufferCapacity);
+		buffer_length += result;
+		if (buffer_capacity - buffer_length < CHUNK_READ_SIZE) {
+			buffer_capacity += CHUNK_READ_SIZE;
+			buffer = realloc(buffer, buffer_capacity);
 		}
 
-		// checking for various blocks
-		// everything before the body must use CRLF as the new line separator
-		// if we haven't found the end of the request line check this chunk for a line break
-		if (endOfRequestLine == -1 && bufferLength >= 2 && bufferLength - 2 >= lastChecked) {
-			for (size_t i = lastChecked; i < bufferLength - 2; i++) {
-				if (!memcmp(buffer + i, "\r\n", 2)) {
-					endOfRequestLine = i;
-					break;
-				}
-			}
-			lastChecked = bufferLength - 2;
-		}
-		// if we haven't found the end of the headers check this chunk for an empty line
-		if (endOfHeader == -1 && bufferLength >= 4 && bufferLength - 4 >= lastChecked) {
-			// TODO JEFF header detection not working for GET requests with no body, missing last newline?
-			for (size_t i = lastChecked; i < bufferLength - 4; i++) {
-				if (!memcmp(buffer + i, "\r\n\r\n", 4)) {
-					endOfHeader = i;
-
-					// parse the headers
-					http_headers headers;
-					http_headers_init(&headers);
-					size_t startOfLine = endOfRequestLine + 2;
-					for (size_t endOfLine = startOfLine; endOfLine < endOfHeader + 2; endOfLine++) {
-						if (!memcmp(buffer + endOfLine, "\r\n", 2)) {
-							// TODO JEFF some of this is debug only
-							size_t lineLen = endOfLine - startOfLine;
-							char *line = malloc(lineLen + 1);
-							memcpy(line, buffer + startOfLine, lineLen);
-							line[lineLen] = 0;
-							free(line);
-
-							size_t colon;
-							for (colon = startOfLine; colon < endOfLine; colon++) {
-								if (buffer[colon] == ':') {
+		if (!found_request_line || !found_end_of_header) {
+			for (size_t i = end_of_last_line; i < buffer_length - 1; i++) {
+				// rfc says all lines before the body start with CRLF
+				if (buffer[i] == '\r' && buffer[i + 1] == '\n') {
+					size_t lineLength = i - end_of_last_line;
+					// TODO JEFF line is for easy debugging
+					char *line = malloc(lineLength + 1);
+					memcpy(line, buffer + end_of_last_line, lineLength);
+					line[lineLength] = 0;
+					if (!found_request_line) {
+						found_request_line = 1;
+						printf("TODO JEFF parse request line: %s\n", line);
+					} else if (!found_end_of_header) {
+						if (lineLength == 0) {
+							found_end_of_header = 1;
+							start_of_body = i + 2;
+						} else {
+							size_t colonIndex = 0;
+							int foundSeparator = 0;
+							for (colonIndex = 0; colonIndex < lineLength; colonIndex++) {
+								if (buffer[end_of_last_line + colonIndex] == ':') {
+									foundSeparator = 1;
 									break;
 								}
 							}
-							if (colon == endOfLine) {
-								log_error("TODO JEFF handle the fact that this line isn't a valid header, no value: %s\n", line);
+							if (foundSeparator) {
+								http_header *header = http_headers_get_or_create(&headers, buffer + end_of_last_line, colonIndex);
+								http_header_append(header, buffer + end_of_last_line + colonIndex + 1, lineLength - colonIndex - 1);
 							} else {
-								http_header *header = http_headers_get_or_create(&headers, buffer + startOfLine, colon - startOfLine);
-								size_t valueLen = endOfLine - colon - 1;
-								size_t startOfValue = colon + 1;
-								if (buffer[startOfValue] == ' ') {
-									valueLen--;
-									startOfValue++;
-								}
-								http_header_append(header, buffer + startOfValue, valueLen);
-								log_trace("TODO JEFF parsed header, name: %s\n", header->name);
-								for (size_t j = 0; j < header->valuesLen; j++) {
-									log_trace("TODO JEFF value[%llu] = %s\n", j, header->values[j]);
-								}
+								log_error("TODO JEFF handle error parsing header: %s\n", line);
 							}
-
-							// skip the new line
-							endOfLine += 2;
-							startOfLine = endOfLine;
 						}
 					}
-
-					// TODO JEFF debugging
-					for (size_t headerIndex = 0; headerIndex < headers.len; headerIndex++) {
-						http_header *header = &headers.headers[headerIndex];
-						log_trace("TODO JEFF headers[%llu], name: %s\n", headerIndex, header->name);
-						for (size_t valueIndex = 0; valueIndex < header->valuesLen; valueIndex++) {
-							log_trace("TODO JEFF     value[%llu] = %s\n", valueIndex, header->values[valueIndex]);
-						}
-					}
-
-					/*
-					TODO JEFF handle content length
-					if no content length provided then we're done
-					if provided, and the total message length would be more than our max read size, abort
-					otherwise set the next read to be the remainder of the message
-					*/
-
-					http_headers_dealloc(&headers);
-
-					break;
+					free(line);
+					// skip the newline
+					end_of_last_line = i + 2;
+					i++;
 				}
 			}
-			lastChecked = bufferLength - 4;
 		}
 	}
-	buffer[bufferLength] = 0;
+	buffer[buffer_length] = 0;
 
-	if (endOfRequestLine != -1) {
-		char *s = malloc(endOfRequestLine + 1);
-		memcpy(s, buffer, endOfRequestLine);
-		s[endOfRequestLine] = 0;
-		log_trace("TODO JEFF request line:\n%s\n", s);
-		free(s);
-	}
-	if (endOfHeader != -1) {
-		// skip the new line at the end of the request line
-		size_t startOfHeaders = endOfRequestLine + 2;
-		size_t headerSize = endOfHeader - startOfHeaders;
-		char *s = malloc(headerSize + 1);
-		memcpy(s, buffer + startOfHeaders, headerSize);
-		s[headerSize] = 0;
-		log_trace("TODO JEFF headers:\n%s\n", s);
-		free(s);
+	log_trace("TODO JEFF headers len: %lu\n", headers.len);
+	for (size_t i = 0; i < headers.len; i++) {
+		log_trace("TODO JEFF header[%lu] = %s\n", i, headers.headers[i].name);
+		for (size_t j = 0; j < headers.headers[i].values_len; j++) {
+			log_trace("TODO JEFF     value[%lu] = %s\n", j, headers.headers[i].values[j]);
+		}
 	}
 
+	size_t body_length = buffer_length - start_of_body;
+	if (body_length > 0) {
+		// TODO body is for debugging
+		char *body = malloc(body_length + 1);
+		memcpy(body, buffer + start_of_body, body_length);
+		body[body_length] = 0;
+		log_trace("TODO JEFF body len: %lu\nbody:\n%s\n", body_length, body);
+		free(body);
+	} else {
+		log_trace("TODO JEFF no body\n");
+	}
+
+	http_headers_dealloc(&headers);
 	free(buffer);
 	close(data->socket);
 	return 0;
