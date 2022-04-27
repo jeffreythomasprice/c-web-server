@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "../shared/log.h"
@@ -369,6 +370,8 @@ void socket_accept(int s) {
 		// we did enqueue, it's just taking a long time
 		// we'll close the socket but leave the memory alone so the other end can eventually free it
 		// TODO send a timeout http response?
+		// make sure to break any existing read so the read times out
+		shutdown(s, SHUT_RDWR);
 		close(s);
 		break;
 	default:
