@@ -4,6 +4,7 @@
 #include "log.h"
 
 // TODO needs sync around logging
+// TODO timestamps
 
 void log_trace(char *format, ...) {
 	va_list args;

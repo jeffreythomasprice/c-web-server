@@ -79,7 +79,7 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 		addr.sin_addr.s_addr = INADDR_ANY;
 	} else {
 		log_trace("tcp_socket_wrapper_init %s:%i\n", address, port);
-		log_error("TODO JEFF implement addr parsing\n");
+		log_error("TODO implement addr parsing\n");
 		return 1;
 	}
 	addr.sin_port = htons(port);
