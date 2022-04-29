@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include "buffer.h"
 
 void buffer_init(buffer *b) {
