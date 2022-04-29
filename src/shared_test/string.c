@@ -79,5 +79,57 @@ int main() {
 	string_dealloc(&s);
 	string_dealloc(&s2);
 
+	string_init(&s);
+
+	string_init_cstr(&s2, "foobarbaz");
+	string_sets(&s, &s2);
+	assert(!strcmp(string_get_cstr(&s), "foobarbaz"));
+	string_dealloc(&s2);
+	string_setf(&s, "blah %d", 42);
+	assert(!strcmp(string_get_cstr(&s), "blah 42"));
+	string_dealloc(&s);
+
+	string_init(&s);
+	string_init_cstr(&s2, "foobarbaz");
+	string_set_substr(&s, &s2, 3, 6);
+	assert(!strcmp(string_get_cstr(&s), "bar"));
+	string_dealloc(&s);
+	string_dealloc(&s2);
+
+	string_init_cstr(&s, "foofoobarbazbaz");
+	string_init_cstr(&s2, "bar");
+	assert(string_index_of_str(&s, &s2, 0) == 6);
+	assert(string_index_of_str(&s, &s2, 6) == 6);
+	assert(string_index_of_str(&s, &s2, 7) == -1);
+	string_setf(&s2, "baz");
+	assert(string_index_of_str(&s, &s2, 0) == 9);
+	assert(string_index_of_str(&s, &s2, 9) == 9);
+	assert(string_index_of_str(&s, &s2, 10) == 12);
+	string_setf(&s2, "whizbang");
+	assert(string_index_of_str(&s, &s2, 0) == -1);
+	string_setf(&s2, "whizbangwhizbangwhizbangwhizbang");
+	assert(string_index_of_str(&s, &s2, 0) == -1);
+	string_setf(&s2, "");
+	assert(string_index_of_str(&s, &s2, 0) == -1);
+	string_dealloc(&s2);
+	assert(string_index_of_cstr(&s, "foo", 0) == 0);
+	assert(string_index_of_cstr(&s, "foo", 1) == 3);
+	assert(string_index_of_cstr(&s, "foo", 4) == -1);
+	assert(string_index_of_cstr(&s, "bar", 0) == 6);
+	assert(string_index_of_cstr(&s, "bar", 6) == 6);
+	assert(string_index_of_cstr(&s, "bar", 7) == -1);
+	assert(string_index_of_cstr(&s, "baz", 0) == 9);
+	assert(string_index_of_cstr(&s, "baz", 9) == 9);
+	assert(string_index_of_cstr(&s, "baz", 10) == 12);
+	assert(string_index_of_cstr(&s, "baz", 13) == -1);
+	assert(string_index_of_cstr(&s, "blarg", 0) == -1);
+	assert(string_index_of_cstr(&s, "foofoobarbazbaz2", 0) == -1);
+	assert(string_index_of_cstr(&s, "", 0) == -1);
+	assert(string_index_of_char(&s, 'f', 0) == 0);
+	assert(string_index_of_char(&s, 'o', 0) == 1);
+	assert(string_index_of_char(&s, 'a', 0) == 7);
+	assert(string_index_of_char(&s, 'y', 0) == -1);
+	string_dealloc(&s);
+
 	return 0;
 }

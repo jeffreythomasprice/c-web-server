@@ -15,18 +15,64 @@ void string_dealloc(string *s);
 size_t string_get_length(string *s);
 char *string_get_cstr(string *s);
 
-void string_clear(string *s);
-
-void string_appends(string *s, string *other);
-void string_appendf(string *s, char *fmt, ...);
-
 /**
+ * Sets this string to the empty string.
+ */
+void string_clear(string *s);
+/**
+ * Adds the contents of other to s.
+ */
+void string_appends(string *s, string *other);
+/**
+ * Replaces the contents of s with other.
+ */
+void string_sets(string *s, string *other);
+/**
+ * Adds the contents of the formatted string to s.
+ */
+void string_appendf(string *s, char *fmt, ...);
+/**
+ * Replaces the contents of s with the formatted string.
+ */
+void string_setf(string *s, char *fmt, ...);
+/**
+ * Appends a portion of src to dst.
  * @param dst the string to add to
  * @param src the string from which the substring is taken
  * @param start the index of the first character in src (inclusive)
  * @param end the index after the last character in src (exclusive)
  */
 void string_append_substr(string *dst, string *src, size_t start, size_t end);
+/**
+ * Replaces the contents of dst with a portion of src.
+ * @param dst the string to replace
+ * @param src the string from which the substring is taken
+ * @param start the index of the first character in src (inclusive)
+ * @param end the index after the last character in src (exclusive)
+ */
+void string_set_substr(string *dst, string *src, size_t start, size_t end);
+
+/**
+ * @param s the string to search in
+ * @param find a string to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_of_str(string *s, string *find, size_t start);
+/**
+ * @param s the string to search in
+ * @param find a string to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_of_cstr(string *s, char *find, size_t start);
+/**
+ * @param s the string to search in
+ * @param find a character to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_of_char(string *s, char find, size_t start);
 
 /**
  * Splits the string around the given delimiter. Exact matches are looked for.

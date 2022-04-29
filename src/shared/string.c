@@ -43,6 +43,11 @@ void string_appends(string *s, string *other) {
 	buffer_append_bytes(&s->b, other->b.data, string_get_length(other) + 1);
 }
 
+void string_sets(string *s, string *other) {
+	string_clear(s);
+	string_appends(s, other);
+}
+
 void string_appendf(string *s, char *fmt, ...) {
 	// check how much more space we need
 	va_list args;
@@ -51,12 +56,29 @@ void string_appendf(string *s, char *fmt, ...) {
 	va_end(args);
 	// resize to fit
 	size_t current_length = string_get_length(s);
+	// TODO should be ensure_capacity
 	buffer_set_capacity(&s->b, current_length + n + 1);
 	// chop off the trailing 0 from this string
 	buffer_set_length(&s->b, current_length);
-	// write the other one here
+	// write the string here
 	va_start(args, fmt);
 	vsnprintf(s->b.data + current_length, n + 1, fmt, args);
+	va_end(args);
+	buffer_set_length(&s->b, current_length + n + 1);
+}
+
+void string_setf(string *s, char *fmt, ...) {
+	// check how much more space we need
+	va_list args;
+	va_start(args, fmt);
+	size_t n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+	// resize to fit
+	// TODO should be ensure_capacity
+	buffer_set_length(&s->b, n + 1);
+	// write the string here
+	va_start(args, fmt);
+	vsnprintf(s->b.data, n + 1, fmt, args);
 	va_end(args);
 }
 
@@ -79,6 +101,55 @@ void string_append_substr(string *dst, string *src, size_t start, size_t end) {
 	// write the trailing 0
 	buffer_set_length(&dst->b, dst_len + substr_len + 1);
 	dst->b.data[dst_len + substr_len] = 0;
+}
+
+void string_set_substr(string *dst, string *src, size_t start, size_t end) {
+	string_clear(dst);
+	string_append_substr(dst, src, start, end);
+}
+
+size_t string_index_of_str(string *s, string *find, size_t start) {
+	// TODO JEFF handle start index
+	size_t s_len = string_get_length(s);
+	size_t find_len = string_get_length(find);
+	if (find_len > s_len) {
+		return -1;
+	}
+	for (size_t i = 0; i < s_len - find_len; i++) {
+		if (!memcmp(s->b.data + i, find->b.data, find_len)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+size_t string_index_of_cstr(string *s, char *find, size_t start) {
+	// TODO JEFF handle start index
+	size_t s_len = string_get_length(s);
+	size_t find_len = strlen(find);
+	if (find_len > s_len) {
+		return -1;
+	}
+	for (size_t i = 0; i < s_len - find_len; i++) {
+		if (!memcmp(s->b.data + i, find, find_len)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+size_t string_index_of_char(string *s, char find, size_t start) {
+	// TODO JEFF handle start index
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	for (size_t i = 0; i < s_len; i++) {
+		if (s->b.data[i] == find) {
+			return i;
+		}
+	}
+	return -1;
 }
 
 size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results) {
