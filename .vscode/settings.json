@@ -14,6 +14,7 @@
 		"worker_thread_pool.h": "c",
 		"unistd.h": "c",
 		"stdio.h": "c",
-		"string.h": "c"
+		"string.h": "c",
+		"http.h": "c"
 	}
 }
