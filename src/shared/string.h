@@ -15,4 +15,7 @@ void string_dealloc(string *s);
 size_t string_get_length(string *s);
 char *string_get_cstr(string *s);
 
+void string_appends(string *s, string *other);
+void string_appendf(string *s, char *fmt, ...);
+
 #endif

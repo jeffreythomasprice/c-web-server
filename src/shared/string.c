@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <string.h>
 
 #include "string.h"
@@ -26,3 +27,29 @@ size_t string_get_length(string *s) {
 }
 
 char *string_get_cstr(string *s) { return s->b.data; }
+
+void string_appends(string *s, string *other) {
+	// resize to fit both
+	buffer_set_capacity(&s->b, string_get_length(s) + string_get_length(other) + 1);
+	// chop off the trailing 0 from this string
+	buffer_set_length(&s->b, string_get_length(s));
+	// add the other one, including that trailing 0
+	buffer_append_bytes(&s->b, other->b.data, string_get_length(other) + 1);
+}
+
+void string_appendf(string *s, char *fmt, ...) {
+	// check how much more space we need
+	va_list args;
+	va_start(args, fmt);
+	size_t n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+	// resize to fit
+	size_t current_length = string_get_length(s);
+	buffer_set_capacity(&s->b, current_length + n + 1);
+	// chop off the trailing 0 from this string
+	buffer_set_length(&s->b, current_length);
+	// write the other one here
+	va_start(args, fmt);
+	vsnprintf(s->b.data + current_length, n + 1, fmt, args);
+	va_end(args);
+}
