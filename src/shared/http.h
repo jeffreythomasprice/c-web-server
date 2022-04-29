@@ -6,6 +6,8 @@
 
 // TODO needs tests
 
+// TODO JEFF everything in here should be using buffer and string
+
 typedef struct {
 	char *name;
 	size_t values_len;
@@ -33,7 +35,6 @@ void http_headers_init(http_headers *headers);
 void http_headers_dealloc(http_headers *headers);
 http_header *http_headers_get_or_create(http_headers *headers, char *name, size_t name_len);
 
-void http_request_init(http_request *request, char *method, size_t method_len, char *uri, size_t uri_len);
 /**
  * @param fd a file descriptor (probably a socket)
  * @returns 0 when successful, non-0 when any error occurs reading from the file descriptor or if the content is malformed

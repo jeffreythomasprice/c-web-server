@@ -95,16 +95,6 @@ http_header *http_headers_get_or_create(http_headers *headers, char *name, size_
 	return &headers->headers[headers->len - 1];
 }
 
-void http_request_init(http_request *request, char *method, size_t method_len, char *uri, size_t uri_len) {
-	request->method = malloc(method_len + 1);
-	memcpy(request->method, method, method_len);
-	request->method[method_len] = 0;
-	request->uri = malloc(uri_len + 1);
-	memcpy(request->uri, uri, uri_len);
-	request->uri[uri_len] = 0;
-	http_headers_init(&request->headers);
-}
-
 int http_request_init_from_file(http_request *request, int fd) {
 	size_t buffer_capacity = CHUNK_READ_SIZE;
 	uint8_t *buffer = malloc(buffer_capacity);
@@ -121,10 +111,9 @@ int http_request_init_from_file(http_request *request, int fd) {
 
 	// use max size -1 because we're going to want to put a terminating 0
 	size_t max_read_length = MAX_SOCKET_READ_SIZE_IN_CHUNKS * CHUNK_READ_SIZE;
+	size_t expected_content_length = 0;
 	while (buffer_length < max_read_length) {
-		log_trace("TODO JEFF about to read, buffer_length: %llu, max_read_length: %llu\n", buffer_length, max_read_length);
 		size_t result = read(fd, buffer + buffer_length, buffer_capacity - buffer_length);
-		log_trace("TODO JEFF read result: %llu\n", result);
 		if (result < 0) {
 			log_error("http_task failed, error reading from socket %s\n", strerror(errno));
 			is_failed = 1;
@@ -197,8 +186,16 @@ int http_request_init_from_file(http_request *request, int fd) {
 						}
 						if (found_end_of_protocol_version) {
 							is_request_init = 1;
-							http_request_init(request, buffer + method_start, method_end - method_start, buffer + uri_start,
-											  uri_end - uri_start);
+							size_t method_len = method_end - method_start;
+							request->method = malloc(method_len + 1);
+							memcpy(request->method, buffer + method_start, method_len);
+							request->method[method_len] = 0;
+							size_t uri_len = uri_end - uri_start;
+							request->uri = malloc(uri_len + 1);
+							memcpy(request->uri, buffer + uri_start, uri_len);
+							request->uri[uri_len] = 0;
+							http_headers_init(&request->headers);
+
 						} else {
 							char *request_line = malloc(end_of_request_line + 1);
 							memcpy(request_line, buffer, end_of_request_line);
@@ -216,9 +213,8 @@ int http_request_init_from_file(http_request *request, int fd) {
 							// either way we know exactly how many more bytes to read, which may be 0
 							http_header *header = http_headers_get_or_create(&request->headers, "Content-Length", 14);
 							if (header->values_len == 1) {
-								int content_length;
-								if (sscanf(header->values[0], "%i", &content_length) == 1) {
-									max_read_length = i + content_length;
+								if (sscanf(header->values[0], "%zu", &expected_content_length) == 1) {
+									max_read_length = i + expected_content_length;
 								} else {
 									log_error("Content-Length header present but isn't a valid integer: %s\n", header->values[0]);
 									is_failed = 1;
@@ -270,21 +266,24 @@ int http_request_init_from_file(http_request *request, int fd) {
 			request->body[request->body_len] = 0;
 		}
 
-		log_trace("TODO JEFF method: %s\n", request->method);
-		log_trace("TODO JEFF uri: %s\n", request->uri);
-
-		log_trace("TODO JEFF headers len: %lu\n", request->headers.len);
+		// TODO merge trace logging into a single statement
+		log_trace("received request %s %s\n", request->method, request->uri);
 		for (size_t i = 0; i < request->headers.len; i++) {
-			log_trace("TODO JEFF header[%lu] = %s\n", i, request->headers.headers[i].name);
+			log_trace("    %s", request->headers.headers[i].name);
 			for (size_t j = 0; j < request->headers.headers[i].values_len; j++) {
-				log_trace("TODO JEFF     value[%lu] = %s\n", j, request->headers.headers[i].values[j]);
+				if (j > 0) {
+					log_trace(", ");
+				}
+				log_trace("%s", request->headers.headers[i].values[j]);
 			}
+			log_trace("\n");
 		}
+		log_trace("    body: %zu\n", request->body_len);
 
-		if (request->body > 0) {
-			log_trace("TODO JEFF body len: %lu\nbody:\n%s\n", request->body_len, request->body);
-		} else {
-			log_trace("TODO JEFF no body\n");
+		if (request->body_len != expected_content_length) {
+			log_error("expected content length %zu but read %zu bytes\n", expected_content_length, request->body_len);
+			is_failed = 1;
+			goto DONE;
 		}
 	}
 

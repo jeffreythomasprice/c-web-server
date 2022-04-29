@@ -13,6 +13,7 @@
 		"tcp_socket_wrapper.h": "c",
 		"worker_thread_pool.h": "c",
 		"unistd.h": "c",
-		"stdio.h": "c"
+		"stdio.h": "c",
+		"string.h": "c"
 	}
 }
