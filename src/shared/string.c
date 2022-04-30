@@ -109,13 +109,12 @@ void string_set_substr(string *dst, string *src, size_t start, size_t end) {
 }
 
 size_t string_index_of_str(string *s, string *find, size_t start) {
-	// TODO JEFF handle start index
 	size_t s_len = string_get_length(s);
 	size_t find_len = string_get_length(find);
-	if (find_len > s_len) {
+	if (find_len > s_len || find_len == 0) {
 		return -1;
 	}
-	for (size_t i = 0; i < s_len - find_len; i++) {
+	for (size_t i = start; i <= s_len - find_len; i++) {
 		if (!memcmp(s->b.data + i, find->b.data, find_len)) {
 			return i;
 		}
@@ -124,13 +123,12 @@ size_t string_index_of_str(string *s, string *find, size_t start) {
 }
 
 size_t string_index_of_cstr(string *s, char *find, size_t start) {
-	// TODO JEFF handle start index
 	size_t s_len = string_get_length(s);
 	size_t find_len = strlen(find);
-	if (find_len > s_len) {
+	if (find_len > s_len || find_len == 0) {
 		return -1;
 	}
-	for (size_t i = 0; i < s_len - find_len; i++) {
+	for (size_t i = start; i <= s_len - find_len; i++) {
 		if (!memcmp(s->b.data + i, find, find_len)) {
 			return i;
 		}
@@ -139,12 +137,11 @@ size_t string_index_of_cstr(string *s, char *find, size_t start) {
 }
 
 size_t string_index_of_char(string *s, char find, size_t start) {
-	// TODO JEFF handle start index
 	size_t s_len = string_get_length(s);
 	if (s_len == 0) {
 		return -1;
 	}
-	for (size_t i = 0; i < s_len; i++) {
+	for (size_t i = start; i < s_len; i++) {
 		if (s->b.data[i] == find) {
 			return i;
 		}
