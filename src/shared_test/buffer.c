@@ -46,6 +46,26 @@ int main() {
 	assert(b.length == 0);
 	assert(b.data == NULL);
 
+	buffer_ensure_capacity(&b, 5);
+	assert(b.capacity == 5);
+	assert(b.length == 0);
+	assert(b.data != NULL);
+
+	buffer_set_length(&b, 5);
+	assert(b.capacity == 5);
+	assert(b.length == 5);
+	assert(b.data != NULL);
+
+	buffer_ensure_capacity(&b, 10);
+	assert(b.capacity == 10);
+	assert(b.length == 5);
+	assert(b.data != NULL);
+
+	buffer_ensure_capacity(&b, 5);
+	assert(b.capacity == 10);
+	assert(b.length == 5);
+	assert(b.data != NULL);
+
 	buffer_dealloc(&b);
 
 	buffer_init_copy(&b, "abcd", 4);

@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,7 +11,9 @@ void string_init(string *s) {
 	s->b.data[0] = 0;
 }
 
-void string_init_cstr(string *s, char *c) { string_init_cstr_len(s, c, strlen(c)); }
+void string_init_cstr(string *s, char *c) {
+	string_init_cstr_len(s, c, strlen(c));
+}
 
 void string_init_cstr_len(string *s, char *c, size_t len) {
 	buffer_init(&s->b);
@@ -20,35 +23,75 @@ void string_init_cstr_len(string *s, char *c, size_t len) {
 	s->b.data[len] = 0;
 }
 
-void string_dealloc(string *s) { buffer_dealloc(&s->b); }
+void string_dealloc(string *s) {
+	buffer_dealloc(&s->b);
+}
 
 size_t string_get_length(string *s) {
 	// -1 because the length of the buffer includes the terminating 0
 	return s->b.length - 1;
 }
 
-char *string_get_cstr(string *s) { return s->b.data; }
+char *string_get_cstr(string *s) {
+	return s->b.data;
+}
 
 void string_clear(string *s) {
 	buffer_set_length(&s->b, 1);
 	s->b.data[0] = 0;
 }
 
-void string_appends(string *s, string *other) {
+void string_append_str(string *s, string *other) {
+	size_t s_len = string_get_length(s);
+	size_t other_len = string_get_length(other);
 	// resize to fit both
-	buffer_set_capacity(&s->b, string_get_length(s) + string_get_length(other) + 1);
+	buffer_set_capacity(&s->b, s_len + other_len + 1);
 	// chop off the trailing 0 from this string
-	buffer_set_length(&s->b, string_get_length(s));
+	buffer_set_length(&s->b, s_len);
 	// add the other one, including that trailing 0
-	buffer_append_bytes(&s->b, other->b.data, string_get_length(other) + 1);
+	buffer_append_bytes(&s->b, other->b.data, other_len + 1);
 }
 
-void string_sets(string *s, string *other) {
+void string_set_str(string *s, string *other) {
 	string_clear(s);
-	string_appends(s, other);
+	string_append_str(s, other);
 }
 
-void string_appendf(string *s, char *fmt, ...) {
+void string_append_cstr(string *s, char *other) {
+	size_t s_len = string_get_length(s);
+	size_t other_len = strlen(other);
+	// resize to fit both
+	buffer_set_capacity(&s->b, s_len + other_len + 1);
+	// chop off the trailing 0 from this string
+	buffer_set_length(&s->b, s_len);
+	// add the other one, including that trailing 0
+	buffer_append_bytes(&s->b, other, other_len + 1);
+}
+
+void string_set_cstr(string *s, char *other) {
+	string_clear(s);
+	string_append_cstr(s, other);
+}
+
+void string_append_cstr_len(string *s, char *other, size_t other_len) {
+	size_t s_len = string_get_length(s);
+	// resize to fit both
+	buffer_set_capacity(&s->b, s_len + other_len + 1);
+	// chop off the trailing 0 from this string
+	buffer_set_length(&s->b, s_len);
+	// add the other one
+	buffer_append_bytes(&s->b, other, other_len);
+	// add the trailing 0
+	buffer_set_length(&s->b, s_len + other_len + 1);
+	s->b.data[s_len + other_len] = 0;
+}
+
+void string_set_cstr_len(string *s, char *other, size_t other_len) {
+	string_clear(s);
+	string_append_cstr_len(s, other, other_len);
+}
+
+void string_append_cstrf(string *s, char *fmt, ...) {
 	// check how much more space we need
 	va_list args;
 	va_start(args, fmt);
@@ -56,8 +99,7 @@ void string_appendf(string *s, char *fmt, ...) {
 	va_end(args);
 	// resize to fit
 	size_t current_length = string_get_length(s);
-	// TODO should be ensure_capacity
-	buffer_set_capacity(&s->b, current_length + n + 1);
+	buffer_ensure_capacity(&s->b, current_length + n + 1);
 	// chop off the trailing 0 from this string
 	buffer_set_length(&s->b, current_length);
 	// write the string here
@@ -67,14 +109,13 @@ void string_appendf(string *s, char *fmt, ...) {
 	buffer_set_length(&s->b, current_length + n + 1);
 }
 
-void string_setf(string *s, char *fmt, ...) {
+void string_set_cstrf(string *s, char *fmt, ...) {
 	// check how much more space we need
 	va_list args;
 	va_start(args, fmt);
 	size_t n = vsnprintf(NULL, 0, fmt, args);
 	va_end(args);
 	// resize to fit
-	// TODO should be ensure_capacity
 	buffer_set_length(&s->b, n + 1);
 	// write the string here
 	va_start(args, fmt);
@@ -237,4 +278,31 @@ size_t string_split(string *s, char *delim, size_t *results, size_t results_capa
 		result_count++;
 	}
 	return result_count;
+}
+
+int string_compare_str(string *a, string *b, string_compare_mode mode) {
+	return string_compare_cstr_len(a, b->b.data, string_get_length(b), mode);
+}
+
+int string_compare_cstr(string *a, char *b, string_compare_mode mode) {
+	return string_compare_cstr_len(a, b, strlen(b), mode);
+}
+
+int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mode mode) {
+	size_t a_len = string_get_length(a);
+	size_t min_len = a_len < b_len ? a_len : b_len;
+	for (size_t i = 0; i < min_len; i++) {
+		char ac = a->b.data[i];
+		char bc = b[i];
+		if (mode == STRING_COMPARE_CASE_INSENSITIVE) {
+			ac = tolower(ac);
+			bc = tolower(bc);
+		}
+		char diff = ac - bc;
+		if (diff) {
+			return diff;
+		}
+	}
+	size_t diff = a_len - b_len;
+	return diff;
 }

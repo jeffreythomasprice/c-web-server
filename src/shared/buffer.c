@@ -36,11 +36,15 @@ void buffer_set_capacity(buffer *b, size_t new_capacity) {
 	}
 }
 
+void buffer_ensure_capacity(buffer *b, size_t new_capacity) {
+	if (new_capacity > b->capacity) {
+		buffer_set_capacity(b, new_capacity);
+	}
+}
+
 void buffer_set_length(buffer *b, size_t new_length) {
 	if (b->length != new_length) {
-		if (new_length > b->capacity) {
-			buffer_set_capacity(b, new_length);
-		}
+		buffer_ensure_capacity(b, new_length);
 		b->length = new_length;
 	}
 }
@@ -48,8 +52,6 @@ void buffer_set_length(buffer *b, size_t new_length) {
 void buffer_append_bytes(buffer *b, void *data, size_t len) {
 	size_t desired_length = b->length + len;
 	size_t desired_index = b->length;
-	if (desired_length > b->length) {
-		buffer_set_length(b, desired_length);
-	}
+	buffer_set_length(b, desired_length);
 	memcpy(b->data + desired_index, data, len);
 }

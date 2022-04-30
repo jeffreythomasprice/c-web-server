@@ -9,6 +9,7 @@ extern "C" {
 #include <semaphore.h>
 #include <stdint.h>
 
+// TODO thread pool errors should be an enum
 #define WORKER_THREAD_POOL_SUCCESS 0
 #define WORKER_THREAD_POOL_ERROR 1
 #define WORKER_THREAD_POOL_ERROR_QUEUE_FULL 1

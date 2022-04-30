@@ -3,6 +3,11 @@
 
 #include "buffer.h"
 
+typedef enum {
+	STRING_COMPARE_CASE_SENSITIVE = 0,
+	STRING_COMPARE_CASE_INSENSITIVE = 1
+} string_compare_mode;
+
 typedef struct {
 	buffer b;
 } string;
@@ -22,19 +27,41 @@ void string_clear(string *s);
 /**
  * Adds the contents of other to s.
  */
-void string_appends(string *s, string *other);
+void string_append_str(string *s, string *other);
 /**
  * Replaces the contents of s with other.
  */
-void string_sets(string *s, string *other);
+void string_set_str(string *s, string *other);
+/**
+ * Adds the contents of other to s.
+ * @param other a 0-terminated string
+ */
+void string_append_cstr(string *s, char *other);
+/**
+ * Replaces the contents of s with other.
+ * @param other a 0-terminated string
+ */
+void string_set_cstr(string *s, char *other);
+/**
+ * Adds the contents of other to s.
+ * @param other doesn't have to be 0-terminated
+ * @param other_len the length of other
+ */
+void string_append_cstr_len(string *s, char *other, size_t other_len);
+/**
+ * Replaces the contents of s with other.
+ * @param other doesn't have to be 0-terminated
+ * @param other_len the length of other
+ */
+void string_set_cstr_len(string *s, char *other, size_t other_len);
 /**
  * Adds the contents of the formatted string to s.
  */
-void string_appendf(string *s, char *fmt, ...);
+void string_append_cstrf(string *s, char *fmt, ...);
 /**
  * Replaces the contents of s with the formatted string.
  */
-void string_setf(string *s, char *fmt, ...);
+void string_set_cstrf(string *s, char *fmt, ...);
 /**
  * Appends a portion of src to dst.
  * @param dst the string to add to
@@ -110,5 +137,24 @@ size_t string_reverse_index_of_char(string *s, char find, size_t start);
  * @returns the number of strings that would be produced, which may be more than results_capacity
  */
 size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results);
+
+/**
+ * @return zero if the two strings are equal, a negative value if a should be sorted before b, or a positive value if b should be sorted
+ * after a
+ */
+int string_compare_str(string *a, string *b, string_compare_mode mode);
+/**
+ * @param b a 0-terminated string
+ * @return zero if the two strings are equal, a negative value if a should be sorted before b, or a positive value if b should be sorted
+ * after a
+ */
+int string_compare_cstr(string *a, char *b, string_compare_mode mode);
+/**
+ * @param b doesn't have to be 0-terminated
+ * @param b_len the length of other
+ * @return zero if the two strings are equal, a negative value if a should be sorted before b, or a positive value if b should be sorted
+ * after a
+ */
+int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mode mode);
 
 #endif
