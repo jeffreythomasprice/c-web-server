@@ -75,6 +75,28 @@ size_t string_index_of_cstr(string *s, char *find, size_t start);
 size_t string_index_of_char(string *s, char find, size_t start);
 
 /**
+ * @param s the string to search in
+ * @param find a string to search for
+ * @param start the index in s to start looking
+ * @returns the index of the last match in s, or -1 if no match
+ */
+size_t string_reverse_index_of_str(string *s, string *find, size_t start);
+/**
+ * @param s the string to search in
+ * @param find a string to search for
+ * @param start the index in s to start looking
+ * @returns the index of the last match in s, or -1 if no match
+ */
+size_t string_reverse_index_of_cstr(string *s, char *find, size_t start);
+/**
+ * @param s the string to search in
+ * @param find a character to search for
+ * @param start the index in s to start looking
+ * @returns the index of the last match in s, or -1 if no match
+ */
+size_t string_reverse_index_of_char(string *s, char find, size_t start);
+
+/**
  * Splits the string around the given delimiter. Exact matches are looked for.
  *
  * If more elements would be produced than max_results, the characters at the end of the match are returned as a single result. 0 is treated

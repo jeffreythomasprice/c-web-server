@@ -149,6 +149,59 @@ size_t string_index_of_char(string *s, char find, size_t start) {
 	return -1;
 }
 
+size_t string_reverse_index_of_str(string *s, string *find, size_t start) {
+	size_t s_len = string_get_length(s);
+	size_t find_len = string_get_length(find);
+	if (find_len > s_len || find_len == 0) {
+		return -1;
+	}
+	size_t last_valid_index = s_len - find_len;
+	if (start > last_valid_index) {
+		start = last_valid_index;
+	}
+	for (size_t i = start; i != -1; i--) {
+		if (!memcmp(s->b.data + i, find->b.data, find_len)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+size_t string_reverse_index_of_cstr(string *s, char *find, size_t start) {
+	size_t s_len = string_get_length(s);
+	size_t find_len = strlen(find);
+	if (find_len > s_len || find_len == 0) {
+		return -1;
+	}
+	size_t last_valid_index = s_len - find_len;
+	if (start > last_valid_index) {
+		start = last_valid_index;
+	}
+	for (size_t i = start; i != -1; i--) {
+		if (!memcmp(s->b.data + i, find, find_len)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+size_t string_reverse_index_of_char(string *s, char find, size_t start) {
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	size_t last_valid_index = s_len - 1;
+	if (start > last_valid_index) {
+		start = last_valid_index;
+	}
+	for (size_t i = start; i != -1; i--) {
+		if (s->b.data[i] == find) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results) {
 	if (max_results == 0) {
 		max_results = -1;
