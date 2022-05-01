@@ -71,7 +71,7 @@ void socket_accept(int s) {
 	// 5 seconds in nanoseconds
 	const uint64_t timeout = 5000000000llu;
 	http_worker_task_data *data = malloc(sizeof(http_worker_task_data));
-	io_init_socket(&data->socket, s, 1);
+	io_init_file_descriptor(&data->socket, s, 1);
 	int enqueue_error = worker_thread_pool_enqueue(&http_worker_pool, http_task, data, NULL, timeout);
 	switch (enqueue_error) {
 	case 0:

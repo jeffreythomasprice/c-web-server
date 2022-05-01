@@ -2,31 +2,20 @@
 
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
-int io_file_read(io *io, void *dst, size_t n, string *error) {
-	size_t result = fread(dst, 1, n, io->file.file);
-	if (result != n) {
-		int error_code = ferror(io->file.file);
-		if (error_code) {
-			string_set_cstrf(error, "error reading from file: %s", strerror(error_code));
-		}
-		return -1;
+int io_file_descriptor_read(io *io, void *dst, size_t n, string *error) {
+	size_t result = read(io->file_descriptor.file_descriptor, dst, n);
+	if (result < 0 && error) {
+		string_set_cstrf(error, "error reading from file descriptor: %s", strerror(errno));
 	}
 	return result;
 }
 
-int io_file_close(io *io, string *error) {
-	if (io->file.should_close) {
-		fclose(io->file.file);
+int io_file_descriptor_close(io *io, string *error) {
+	if (io->file_descriptor.should_close) {
+		close(io->file_descriptor.file_descriptor);
 	}
-}
-
-int io_socket_read(io *io, void *dst, size_t n, string *error) {
-	// TODO JEFF implement me!
-}
-
-int io_socket_close(io *io, string *error) {
-	// TODO JEFF implement me!
 }
 
 int io_buffer_read(io *io, void *dst, size_t n, string *error) {
@@ -46,32 +35,26 @@ int io_buffer_close(io *io, string *error) {
 	return 0;
 }
 
-void io_init_file(io *io, FILE *file, int should_close) {
-	io->read = (io_func_read)io_file_read;
-	io->close = (io_func_close)io_file_close;
-	io->file.file = file;
-	io->file.should_close = should_close;
+void io_init_file_descriptor(io *io, int file_descriptor, int should_close) {
+	io->read = (io_func_read)io_file_descriptor_read;
+	io->close = (io_func_close)io_file_descriptor_close;
+	io->file_descriptor.file_descriptor = file_descriptor;
+	io->file_descriptor.should_close = should_close;
 }
 
 int io_init_file_cstr(io *io, char *path, char *mode, string *error) {
-	io->read = (io_func_read)io_file_read;
-	io->close = (io_func_close)io_file_close;
-	io->file.file = fopen(path, mode);
-	if (!io->file.file) {
+	io->read = (io_func_read)io_file_descriptor_read;
+	io->close = (io_func_close)io_file_descriptor_close;
+	FILE *file = fopen(path, mode);
+	if (!file) {
 		if (error) {
 			string_set_cstrf(error, "error opening file at \"%s\" with mode \"%s\": %s", path, mode, strerror(errno));
 		}
 		return 1;
 	}
-	io->file.should_close = 1;
+	io->file_descriptor.file_descriptor = fileno(file);
+	io->file_descriptor.should_close = 1;
 	return 0;
-}
-
-void io_init_socket(io *io, int socket, int should_close) {
-	io->read = (io_func_read)io_socket_read;
-	io->close = (io_func_close)io_socket_close;
-	io->socket.socket = socket;
-	io->socket.should_close = should_close;
 }
 
 void io_init_buffer(io *io, buffer *buffer, int should_dealloc) {

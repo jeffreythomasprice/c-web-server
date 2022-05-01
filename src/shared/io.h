@@ -17,13 +17,9 @@ typedef struct {
 	io_func_close close;
 	union {
 		struct {
-			FILE *file;
+			int file_descriptor;
 			int should_close;
-		} file;
-		struct {
-			int socket;
-			int should_close;
-		} socket;
+		} file_descriptor;
 		struct {
 			buffer *buffer;
 			int should_dealloc;
@@ -32,13 +28,12 @@ typedef struct {
 	};
 } io;
 
-void io_init_file(io *io, FILE *file, int should_close);
+void io_init_file_descriptor(io *io, int file_descriptor, int should_close);
 /**
  * Calls fopen.
  * @param error optional, if provided and an error occurs the contents are replaced with an error message
  */
 int io_init_file_cstr(io *io, char *path, char *mode, string *error);
-void io_init_socket(io *io, int socket, int should_close);
 void io_init_buffer(io *io, buffer *buffer, int should_dealloc);
 int io_dealloc(io *io, string *error);
 /**
