@@ -3,41 +3,10 @@
 #include <errno.h>
 #include <string.h>
 
-typedef struct {
-	io io;
-	FILE *file;
-	int should_close;
-} io_file;
-
-typedef struct {
-	io io;
-	int socket;
-	int should_close;
-} io_socket;
-
-typedef struct {
-	io io;
-	buffer *buffer;
-	int should_dealloc;
-} io_buffer;
-
-int io_file_read(void *io, void *dst, size_t n, string *error);
-int io_file_close(void *io, string *error);
-io_vtable io_vtable_file = {io_file_read, io_file_close};
-
-int io_socket_read(void *io, void *dst, size_t n, string *error);
-int io_socket_close(void *io, string *error);
-io_vtable io_vtable_socket = {io_socket_read, io_socket_close};
-
-int io_buffer_read(void *io, void *dst, size_t n, string *error);
-int io_buffer_close(void *io, string *error);
-io_vtable io_vtable_buffer = {io_buffer_read, io_buffer_close};
-
-int io_file_read(void *io, void *dst, size_t n, string *error) {
-	io_file *fio = io;
-	size_t result = fread(dst, 1, n, fio->file);
+int io_file_read(io *io, void *dst, size_t n, string *error) {
+	size_t result = fread(dst, 1, n, io->file.file);
 	if (result != n) {
-		int error_code = ferror(fio->file);
+		int error_code = ferror(io->file.file);
 		if (error_code) {
 			string_set_cstrf(error, "error reading from file: %s", strerror(error_code));
 		}
@@ -46,70 +15,79 @@ int io_file_read(void *io, void *dst, size_t n, string *error) {
 	return result;
 }
 
-int io_file_close(void *io, string *error) {
-	io_file *fio = io;
-	if (fio->should_close) {
-		fclose(fio->file);
+int io_file_close(io *io, string *error) {
+	if (io->file.should_close) {
+		fclose(io->file.file);
 	}
 }
 
-int io_socket_read(void *io, void *dst, size_t n, string *error) {
+int io_socket_read(io *io, void *dst, size_t n, string *error) {
 	// TODO JEFF implement me!
 }
 
-int io_socket_close(void *io, string *error) {
+int io_socket_close(io *io, string *error) {
 	// TODO JEFF implement me!
 }
 
-int io_buffer_read(void *io, void *dst, size_t n, string *error) {
-	// TODO JEFF implement me!
+int io_buffer_read(io *io, void *dst, size_t n, string *error) {
+	size_t remaining = buffer_get_length(io->buffer.buffer) - io->buffer.index;
+	if (remaining < n) {
+		n = remaining;
+	}
+	memcpy(dst, io->buffer.buffer->data + io->buffer.index, n);
+	io->buffer.index += n;
+	return n;
 }
 
-int io_buffer_close(void *io, string *error) {
-	// TODO JEFF implement me!
+int io_buffer_close(io *io, string *error) {
+	if (io->buffer.should_dealloc) {
+		buffer_dealloc(io->buffer.buffer);
+	}
+	return 0;
 }
 
 void io_init_file(io *io, FILE *file, int should_close) {
-	io_file *fio = (io_file *)io;
-	fio->io.vtable = io_vtable_file;
-	fio->file = file;
-	fio->should_close = should_close;
+	io->read = (io_func_read)io_file_read;
+	io->close = (io_func_close)io_file_close;
+	io->file.file = file;
+	io->file.should_close = should_close;
 }
 
 int io_init_file_cstr(io *io, char *path, char *mode, string *error) {
-	io_file *fio = (io_file *)io;
-	fio->io.vtable = io_vtable_file;
-	fio->file = fopen(path, mode);
-	if (!fio->file) {
+	io->read = (io_func_read)io_file_read;
+	io->close = (io_func_close)io_file_close;
+	io->file.file = fopen(path, mode);
+	if (!io->file.file) {
 		if (error) {
 			string_set_cstrf(error, "error opening file at \"%s\" with mode \"%s\": %s", path, mode, strerror(errno));
 		}
 		return 1;
 	}
-	fio->should_close = 1;
+	io->file.should_close = 1;
 	return 0;
 }
 
 void io_init_socket(io *io, int socket, int should_close) {
-	io_socket *sio = (io_socket *)io;
-	sio->io.vtable = io_vtable_socket;
-	sio->socket = socket;
-	sio->should_close = should_close;
+	io->read = (io_func_read)io_socket_read;
+	io->close = (io_func_close)io_socket_close;
+	io->socket.socket = socket;
+	io->socket.should_close = should_close;
 }
 
 void io_init_buffer(io *io, buffer *buffer, int should_dealloc) {
-	io_buffer *bio = (io_buffer *)io;
-	bio->io.vtable = io_vtable_buffer;
-	bio->buffer = buffer;
-	bio->should_dealloc = should_dealloc;
+	io->read = (io_func_read)io_buffer_read;
+	io->close = (io_func_close)io_buffer_close;
+	io->buffer.buffer = buffer;
+	io->buffer.should_dealloc = should_dealloc;
+	io->buffer.index = 0;
 }
 
 int io_dealloc(io *io, string *error) {
-	return io->vtable.close(io, error);
+	return io->close(io, error);
 }
 
 int io_read(io *io, void *dst, size_t n, string *error) {
-	return io->vtable.read(io, dst, n, error);
+	return io->read(io, dst, n, error);
 }
 
 int io_read_buffer(io *io, buffer *dst, size_t n, string *error) {

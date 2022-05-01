@@ -19,13 +19,17 @@ void buffer_test_ptr() {
 
 	void *dst = malloc(1024);
 
+	void *dst_ptr = dst;
 	assert(io_read(&io, dst, 3, NULL) == 3);
 	assert(!memcmp(dst, "Hel", 3));
-	assert(io_read(&io, dst, 3, NULL) == 3);
+	dst_ptr += 3;
+	assert(io_read(&io, dst_ptr, 3, NULL) == 3);
 	assert(!memcmp(dst, "Hello,", 6));
-	assert(io_read(&io, dst, 20, NULL) == 7);
+	dst_ptr += 3;
+	assert(io_read(&io, dst_ptr, 20, NULL) == 7);
 	assert(!memcmp(dst, "Hello, World!", 13));
-	assert(io_read(&io, dst, 20, NULL) == 0);
+	dst_ptr += 7;
+	assert(io_read(&io, dst_ptr, 20, NULL) == 0);
 	assert(!memcmp(dst, "Hello, World!", 13));
 
 	free(dst);

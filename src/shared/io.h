@@ -9,13 +9,27 @@
 extern "C" {
 #endif
 
-typedef struct {
-	int (*read)(void *io, void *dst, size_t n, string *error);
-	int (*close)(void *io, string *error);
-} io_vtable;
+typedef int (*io_func_read)(void *io, void *dst, size_t n, string *error);
+typedef int (*io_func_close)(void *io, string *error);
 
 typedef struct {
-	io_vtable vtable;
+	io_func_read read;
+	io_func_close close;
+	union {
+		struct {
+			FILE *file;
+			int should_close;
+		} file;
+		struct {
+			int socket;
+			int should_close;
+		} socket;
+		struct {
+			buffer *buffer;
+			int should_dealloc;
+			size_t index;
+		} buffer;
+	};
 } io;
 
 void io_init_file(io *io, FILE *file, int should_close);
