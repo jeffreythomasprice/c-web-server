@@ -21,6 +21,10 @@ void buffer_dealloc(buffer *b) {
 	}
 }
 
+size_t buffer_get_capacity(buffer *b) {
+	return b->capacity;
+}
+
 void buffer_set_capacity(buffer *b, size_t new_capacity) {
 	if (new_capacity != b->capacity) {
 		if (new_capacity == 0) {
@@ -42,11 +46,19 @@ void buffer_ensure_capacity(buffer *b, size_t new_capacity) {
 	}
 }
 
+size_t buffer_get_length(buffer *b) {
+	return b->length;
+}
+
 void buffer_set_length(buffer *b, size_t new_length) {
 	if (b->length != new_length) {
 		buffer_ensure_capacity(b, new_length);
 		b->length = new_length;
 	}
+}
+
+void buffer_clear(buffer *b) {
+	buffer_set_length(b, 0);
 }
 
 void buffer_append_bytes(buffer *b, void *data, size_t len) {
@@ -55,3 +67,5 @@ void buffer_append_bytes(buffer *b, void *data, size_t len) {
 	buffer_set_length(b, desired_length);
 	memcpy(b->data + desired_index, data, len);
 }
+
+size_t buffer_read(buffer *b, int fd, size_t len) {}

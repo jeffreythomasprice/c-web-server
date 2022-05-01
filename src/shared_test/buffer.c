@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "../shared/buffer.h"
@@ -83,6 +84,27 @@ int main() {
 	assert(b.length == 6);
 	assert(!memcmp(b.data, "abcxyz", 6));
 
+	buffer_dealloc(&b);
+
+	// TODO JEFF this test doesn't work, fread and read are actually very different, can't use file descriptors for sockets and files
+	// interchangeably
+
+	buffer_init(&b);
+	char *test_data = "Hello, World!";
+	FILE *test_data_fd = fmemopen(test_data, strlen(test_data), "r");
+	assert(buffer_read(&b, test_data_fd, 3) == 3);
+	assert(buffer_get_length(&b) == 3);
+	assert(!memcmp(b.data, "Hel", 3));
+	assert(buffer_read(&b, test_data_fd, 5) == 5);
+	assert(buffer_get_length(&b) == 8);
+	assert(!memcmp(b.data, "Hello, W", 8));
+	assert(buffer_read(&b, test_data_fd, 100) == 5);
+	assert(buffer_get_length(&b) == 13);
+	assert(!memcmp(b.data, "Hello, World!", 13));
+	assert(buffer_read(&b, test_data_fd, 100) == 0);
+	assert(buffer_get_length(&b) == 13);
+	assert(!memcmp(b.data, "Hello, World!", 13));
+	fclose(test_data_fd);
 	buffer_dealloc(&b);
 
 	return 0;
