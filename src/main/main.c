@@ -16,7 +16,7 @@
 #define DEFAULT_WORKER_POOL_SIZE 2
 
 typedef struct {
-	int socket;
+	io socket;
 } http_worker_task_data;
 
 int shutdown_requested;
@@ -42,28 +42,36 @@ void signal_handler(int signum) {
 	}
 }
 
+void free_task_data(http_worker_task_data *data) {
+	string error;
+	string_init(&error);
+	if (io_dealloc(&data->socket, &error)) {
+		log_error("failed to close socket io: %s\n", string_get_cstr(&error));
+	}
+	string_dealloc(&error);
+	free(data);
+}
+
 int http_task(int id, void *d) {
 	http_worker_task_data *data = d;
 
 	http_request request;
-	if (http_request_init_from_file(&request, data->socket)) {
+	if (http_request_parse(&request, &data->socket)) {
 		log_error("error parsing http request\n");
 		// TODO respond with failure
 	} else {
 		http_request_dealloc(&request);
 	}
 
-	close(data->socket);
-	free(data);
+	free_task_data(data);
 	return 0;
 }
 
 void socket_accept(int s) {
 	// 5 seconds in nanoseconds
 	const uint64_t timeout = 5000000000llu;
-
 	http_worker_task_data *data = malloc(sizeof(http_worker_task_data));
-	data->socket = s;
+	io_init_socket(&data->socket, s, 1);
 	int enqueue_error = worker_thread_pool_enqueue(&http_worker_pool, http_task, data, NULL, timeout);
 	switch (enqueue_error) {
 	case 0:
@@ -73,23 +81,19 @@ void socket_accept(int s) {
 	case WORKER_THREAD_POOL_ERROR_QUEUE_FULL:
 		log_error("failed to execute incoming request, queue is full\n");
 		// we didn't enqueue, so we can't rely on them to free memory
-		free(data);
-		close(s);
+		free_task_data(data);
 		break;
 	case WORKER_THREAD_POOL_ERROR_TIMEOUT:
 		log_error("timed out waiting on request\n");
 		// we did enqueue, it's just taking a long time
-		// we'll close the socket but leave the memory alone so the other end can eventually free it
-		// TODO send a timeout http response?
 		// make sure to break any existing read so the read times out
 		shutdown(s, SHUT_RDWR);
-		close(s);
+		// TODO indicate to task that it needs to send a timeout http response?
 		break;
 	default:
 		log_error("failed to execute incoming request, %i\n", enqueue_error);
 		// any other error we assume we didn't end up in the queue so clean up
-		free(data);
-		close(s);
+		free_task_data(data);
 		break;
 	}
 }

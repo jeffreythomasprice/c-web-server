@@ -1,13 +1,13 @@
 #ifndef worker_thread_pool_h
 #define worker_thread_pool_h
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // TODO thread pool errors should be an enum
 #define WORKER_THREAD_POOL_SUCCESS 0

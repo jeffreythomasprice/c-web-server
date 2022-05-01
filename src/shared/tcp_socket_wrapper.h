@@ -5,6 +5,10 @@
 
 #include <pthread.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * s is a socket handle that came from accept
  */
@@ -20,5 +24,9 @@ typedef struct {
 
 int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback);
 int tcp_socket_wrapper_destroy(tcp_socket_wrapper *sock_wrap);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

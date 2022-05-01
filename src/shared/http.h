@@ -1,7 +1,12 @@
 #ifndef http_h
 #define http_h
 
+#include "io.h"
 #include "string.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // TODO needs tests
 
@@ -46,10 +51,14 @@ http_header *http_headers_get_cstr_len(http_headers *headers, char *name, size_t
 void http_request_init(http_request *request);
 void http_request_dealloc(http_request *request);
 /**
- * Resets the state of this request to contain the data from the given file descriptor.
- * @param fd a file descriptor (probably a socket)
+ * Reads data from the given source until a complete HTTP document is parsed. Aborts when it's obvious that the document is malformed.
+ * @param io the data source to read from
  * @returns 0 when successful, non-0 when any error occurs reading from the file descriptor or if the content is malformed
  */
-int http_request_clear_and_read_from_file(http_request *request, int fd);
+int http_request_parse(http_request *request, io *io);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

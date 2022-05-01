@@ -7,12 +7,12 @@ https://datatracker.ietf.org/doc/html/rfc4648#section-4
 #ifndef base64_h
 #define base64_h
 
+#include <stdint.h>
+#include <stdlib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdint.h>
-#include <stdlib.h>
 
 /*
 base64 encodes src (a byte array of length src_len) and writes the output to dst (and buffer of length dst_len).

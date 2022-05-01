@@ -8,6 +8,10 @@ add_executable(test_buffer buffer.c)
 target_link_libraries(test_buffer shared)
 add_test(NAME test_buffer COMMAND test_buffer)
 
+add_executable(test_io io.c)
+target_link_libraries(test_io shared)
+add_test(NAME test_io COMMAND test_io)
+
 add_executable(test_string string.c)
 target_link_libraries(test_string shared)
 add_test(NAME test_string COMMAND test_string)

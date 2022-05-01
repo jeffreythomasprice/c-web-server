@@ -67,5 +67,3 @@ void buffer_append_bytes(buffer *b, void *data, size_t len) {
 	buffer_set_length(b, desired_length);
 	memcpy(b->data + desired_index, data, len);
 }
-
-size_t buffer_read(buffer *b, int fd, size_t len) {}

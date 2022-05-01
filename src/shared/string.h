@@ -3,6 +3,10 @@
 
 #include "buffer.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
 	STRING_COMPARE_CASE_SENSITIVE = 0,
 	STRING_COMPARE_CASE_INSENSITIVE = 1
@@ -156,5 +160,9 @@ int string_compare_cstr(string *a, char *b, string_compare_mode mode);
  * after a
  */
 int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mode mode);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

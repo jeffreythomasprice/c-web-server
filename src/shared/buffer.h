@@ -1,6 +1,10 @@
 #ifndef buffer_h
 #define buffer_h
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -38,13 +42,9 @@ void buffer_set_length(buffer *b, size_t new_length);
 void buffer_clear(buffer *b);
 
 void buffer_append_bytes(buffer *b, void *data, size_t len);
-/**
- * Calls read on the file descriptor on a pointer to the end of this buffer. Ensures enough space is available to read the requsted number
- * of bytes, and ensures that the buffer's length is accurate after the read call to fit the new data.
- * @param fd a file descriptor
- * @param len the maximum number of bytes to read
- * @returns the result of the read call performed, positive for number of bytes read, negative for errors
- */
-size_t buffer_read(buffer *b, int fd, size_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
