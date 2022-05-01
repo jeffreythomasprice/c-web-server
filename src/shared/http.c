@@ -115,6 +115,8 @@ http_header *http_headers_get_cstr_len(http_headers *headers, char *name, size_t
 		headers->headers_capacity++;
 	}
 	http_header *result = &headers->headers[headers->headers_length];
+	http_header_clear(result);
+	string_set_cstr_len(http_header_get_name(result), name, name_len);
 	headers->headers_length++;
 	return result;
 }
@@ -268,8 +270,9 @@ int http_request_parse(http_request *request, io *io) {
 														  // create this header if missing
 														  1);
 							string *value = http_header_append_value(header);
-							string_set_cstr_len(value, string_get_cstr(&request->scratch) + split_results[1],
-												split_results[2] - split_results[1]);
+							string_set_cstr_len(value, string_get_cstr(&request->scratch) + split_results[2],
+												split_results[3] - split_results[2]);
+							// TODO JEFF trim value
 						}
 					}
 					// skip the newline

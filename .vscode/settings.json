@@ -16,6 +16,8 @@
 		"stdio.h": "c",
 		"string.h": "c",
 		"http.h": "c",
-		"assert.h": "c"
+		"assert.h": "c",
+		"*.tcc": "c",
+		"random": "c"
 	}
 }
