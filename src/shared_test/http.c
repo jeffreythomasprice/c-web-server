@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdarg.h>
 #include <string.h>
 
 #include "../shared/http.h"
@@ -97,16 +98,20 @@ void assert_uri(http_request *request, char *expected) {
 	assert(string_compare_cstr(&request->uri, expected, STRING_COMPARE_CASE_SENSITIVE) == 0);
 }
 
-void assert_header(http_request *request, char *expected_name, size_t expected_num_values, char **expected_values) {
+void assert_header(http_request *request, char *expected_name, size_t expected_num_values, ...) {
+	va_list args;
+	va_start(args, expected_num_values);
 	http_header *header = http_headers_get_cstr(&request->headers, expected_name, 0);
 	assert(header != NULL);
 	assert(string_compare_cstr(http_header_get_name(header), expected_name, STRING_COMPARE_CASE_SENSITIVE) == 0);
 	assert(http_header_get_num_values(header) == expected_num_values);
 	for (size_t i = 0; i < expected_num_values; i++) {
+		char *expected_value = va_arg(args, char *);
 		log_trace("TODO JEFF header value at %zu = %s, expected value = %s\n", i, string_get_cstr(http_header_get_value(header, i)),
-				  expected_values[i]);
-		assert(string_compare_cstr(http_header_get_value(header, i), expected_values[i], STRING_COMPARE_CASE_SENSITIVE) == 0);
+				  expected_value);
+		assert(string_compare_cstr(http_header_get_value(header, i), expected_value, STRING_COMPARE_CASE_SENSITIVE) == 0);
 	}
+	va_end(args);
 }
 
 void assert_no_body(http_request *request) {
@@ -123,12 +128,9 @@ void parse() {
 										 "\r\n");
 	assert_method(&request, "GET");
 	assert_uri(&request, "/");
-	const char *host[] = {"example.com"};
-	assert_header(&request, "Host", 1, host);
-	const char *userAgent = {"curl/7.68.0"};
-	assert_header(&request, "User-Agent", 1, userAgent);
-	const char *accept = {"*/*"};
-	assert_header(&request, "Accept", 1, accept);
+	assert_header(&request, "Host", 1, "example.com");
+	assert_header(&request, "User-Agent", 1, "curl/7.68.0");
+	assert_header(&request, "Accept", 1, "*/*");
 	assert_no_body(&request);
 	http_request_dealloc(&request);
 }
