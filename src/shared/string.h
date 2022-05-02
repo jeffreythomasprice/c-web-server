@@ -7,7 +7,8 @@
 extern "C" {
 #endif
 
-typedef enum {
+typedef enum
+{
 	STRING_COMPARE_CASE_SENSITIVE = 0,
 	STRING_COMPARE_CASE_INSENSITIVE = 1
 } string_compare_mode;
@@ -84,6 +85,7 @@ void string_append_substr(string *dst, string *src, size_t start, size_t end);
 void string_set_substr(string *dst, string *src, size_t start, size_t end);
 
 /**
+ * Looks for the first occurance of another string in this one.
  * @param s the string to search in
  * @param find a string to search for
  * @param start the index in s to start looking
@@ -91,6 +93,7 @@ void string_set_substr(string *dst, string *src, size_t start, size_t end);
  */
 size_t string_index_of_str(string *s, string *find, size_t start);
 /**
+ * Looks for the first occurance of another string in this one.
  * @param s the string to search in
  * @param find a string to search for
  * @param start the index in s to start looking
@@ -98,6 +101,7 @@ size_t string_index_of_str(string *s, string *find, size_t start);
  */
 size_t string_index_of_cstr(string *s, char *find, size_t start);
 /**
+ * Looks for the first occurance of another string in this one.
  * @param s the string to search in
  * @param find a character to search for
  * @param start the index in s to start looking
@@ -106,6 +110,7 @@ size_t string_index_of_cstr(string *s, char *find, size_t start);
 size_t string_index_of_char(string *s, char find, size_t start);
 
 /**
+ * Looks for the first occurance of another string in this one, searching backwards from the end of this string.
  * @param s the string to search in
  * @param find a string to search for
  * @param start the index in s to start looking
@@ -113,6 +118,7 @@ size_t string_index_of_char(string *s, char find, size_t start);
  */
 size_t string_reverse_index_of_str(string *s, string *find, size_t start);
 /**
+ * Looks for the first occurance of another string in this one, searching backwards from the end of this string.
  * @param s the string to search in
  * @param find a string to search for
  * @param start the index in s to start looking
@@ -120,12 +126,83 @@ size_t string_reverse_index_of_str(string *s, string *find, size_t start);
  */
 size_t string_reverse_index_of_cstr(string *s, char *find, size_t start);
 /**
+ * Looks for the first occurance of another string in this one, searching backwards from the end of this string.
  * @param s the string to search in
  * @param find a character to search for
  * @param start the index in s to start looking
  * @returns the index of the last match in s, or -1 if no match
  */
 size_t string_reverse_index_of_char(string *s, char find, size_t start);
+
+/**
+ * Looks for the first occurance of one of a set of characters in this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_of_any_str(string *s, string *find, size_t start);
+/**
+ * Looks for the first occurance of one of a set of characters in this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_of_any_cstr(string *s, char *find, size_t start);
+
+/**
+ * Looks for the first occurance of one of a set of characters in this string, searching backwards from the end of this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_reverse_index_of_any_str(string *s, string *find, size_t start);
+/**
+ * Looks for the first occurance of one of a set of characters in this string, searching backwards from the end of this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_reverse_index_of_any_cstr(string *s, char *find, size_t start);
+
+/**
+ * Looks for the first occurance of any character othar than one of a set of characters in this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_not_of_any_str(string *s, string *find, size_t start);
+/**
+ * Looks for the first occurance of any character othar than one of a set of characters in this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_index_not_of_any_cstr(string *s, char *find, size_t start);
+
+/**
+ * Looks for the first occurance of any character othar than one of a set of characters in this string, searching backwards from the end of
+ * this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_reverse_index_not_of_any_str(string *s, string *find, size_t start);
+/**
+ * Looks for the first occurance of any character othar than one of a set of characters in this string, searching backwards from the end of
+ * this string.
+ * @param s the string to search in
+ * @param find a set of characters to search for
+ * @param start the index in s to start looking
+ * @returns the index of the first match in s, or -1 if no match
+ */
+size_t string_reverse_index_not_of_any_cstr(string *s, char *find, size_t start);
 
 /**
  * Splits the string around the given delimiter. Exact matches are looked for.

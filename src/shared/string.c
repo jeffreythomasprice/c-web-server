@@ -243,6 +243,46 @@ size_t string_reverse_index_of_char(string *s, char find, size_t start) {
 	return -1;
 }
 
+size_t string_index_of_any_str(string *s, string *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_index_of_any_cstr(string *s, char *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_reverse_index_of_any_str(string *s, string *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_reverse_index_of_any_cstr(string *s, char *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_index_not_of_any_str(string *s, string *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_index_not_of_any_cstr(string *s, char *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_reverse_index_not_of_any_str(string *s, string *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
+size_t string_reverse_index_not_of_any_cstr(string *s, char *find, size_t start) {
+	// TODO JEFF implement me! including tests!
+	return -1;
+}
+
 size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results) {
 	if (max_results == 0) {
 		max_results = -1;
