@@ -257,9 +257,9 @@ int http_request_parse(http_request *request, io *io) {
 							}
 							break;
 						} else {
+							// TODO JEFF header parsing isn't correct yet, need to split around commas
 							string_set_cstr_len(&request->scratch, request->read_buf.data + end_of_last_line, line_length);
 							size_t split_results[4];
-							// TODO should strip off leading spaces after the colon too
 							size_t split_count = string_split(&request->scratch, ":", split_results, 2, 2);
 							if (split_count != 2) {
 								log_error("failed to parse header line: %s\n", string_get_cstr(&request->scratch));
