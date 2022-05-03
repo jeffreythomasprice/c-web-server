@@ -18,6 +18,7 @@
 		"http.h": "c",
 		"assert.h": "c",
 		"*.tcc": "c",
-		"random": "c"
+		"random": "c",
+		"istream": "c"
 	}
 }

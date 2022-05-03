@@ -1,3 +1,8 @@
+/*
+Generating sample data;
+curl example.com -X POST  -H "Content-Type: text/plain" --data-binary @input --trace trace.log
+*/
+
 #include <assert.h>
 #include <stdarg.h>
 #include <string.h>
@@ -116,9 +121,13 @@ void assert_no_body(http_request *request) {
 	assert(buffer_get_length(&request->body) == 0);
 }
 
-// TODO JEFF more http request test cases
+void assert_body(http_request *request, char *expected_body) {
+	size_t len = strlen(expected_body);
+	assert(buffer_get_length(&request->body) == len);
+	assert(!memcmp(&request->body.data, expected_body, len));
+}
 
-void parse() {
+void parse_request_get() {
 	http_request request;
 	http_request_init(&request);
 	assert_parses_successfully(&request, "GET / HTTP/1.1\r\n"
@@ -135,9 +144,99 @@ void parse() {
 	http_request_dealloc(&request);
 }
 
+void parse_request_post_no_body() {
+	http_request request;
+	http_request_init(&request);
+	assert_parses_successfully(&request, "POST / HTTP/1.1\r\n"
+										 "Host: example.com\r\n"
+										 "User-Agent: curl/7.68.0\r\n"
+										 "Accept: */*\r\n"
+										 "\r\n");
+	assert_method(&request, "POST");
+	assert_uri(&request, "/");
+	assert_header(&request, "Host", 1, "example.com");
+	assert_header(&request, "User-Agent", 1, "curl/7.68.0");
+	assert_header(&request, "Accept", 1, "*/*");
+	assert_no_body(&request);
+	http_request_dealloc(&request);
+}
+
+void parse_request_post_with_body_text() {
+	http_request request;
+	http_request_init(&request);
+	assert_parses_successfully(&request, "POST / HTTP/1.1\r\n"
+										 "Host: example.com\r\n"
+										 "User-Agent: curl/7.68.0\r\n"
+										 "Accept: */*\r\n"
+										 "Content-Length: 27\r\n"
+										 "Content-Type: text/plain\r\n"
+										 "\r\n"
+										 "Hello, World!\n"
+										 "another line\n");
+	assert_method(&request, "POST");
+	assert_uri(&request, "/");
+	assert_header(&request, "Host", 1, "example.com");
+	assert_header(&request, "User-Agent", 1, "curl/7.68.0");
+	assert_header(&request, "Accept", 1, "*/*");
+	assert_header(&request, "Content-Type", 1, "text/plain");
+	assert_header(&request, "Content-Length", 1, "27");
+	assert_body(&request, "Hello, World!\n"
+						  "another line\n");
+	http_request_dealloc(&request);
+}
+
+void parse_request_post_with_body_json() {
+	http_request request;
+	http_request_init(&request);
+	assert_parses_successfully(&request, "POST /some/api HTTP/1.1\r\n"
+										 "Host: example.com\r\n"
+										 "User-Agent: curl/7.68.0\r\n"
+										 "Accept: */*\r\n"
+										 "Content-Type: application/json\r\n"
+										 "Content-Length: 27\r\n"
+										 "\r\n"
+										 "{"
+										 "\t\"foo\": \"bar\",\n"
+										 "\t\"baz\": 42,\n"
+										 "\t\"blarg\": {\n"
+										 "\t\t\"array\": [\n"
+										 "\t\t\t1,\n"
+										 "\t\t\t2,\n"
+										 "\t\t\t3\n"
+										 "\t\t]\n"
+										 "\t}\n"
+										 "}\n");
+	assert_method(&request, "POST");
+	assert_uri(&request, "/some/api");
+	assert_header(&request, "Host", 1, "example.com");
+	assert_header(&request, "User-Agent", 1, "curl/7.68.0");
+	assert_header(&request, "Accept", 1, "*/*");
+	assert_header(&request, "Content-Type", 1, "application/json");
+	assert_header(&request, "Content-Length", 1, "79");
+	assert_body(&request, "{"
+						  "\t\"foo\": \"bar\",\n"
+						  "\t\"baz\": 42,\n"
+						  "\t\"blarg\": {\n"
+						  "\t\t\"array\": [\n"
+						  "\t\t\t1,\n"
+						  "\t\t\t2,\n"
+						  "\t\t\t3\n"
+						  "\t\t]\n"
+						  "\t}\n"
+						  "}\n");
+	http_request_dealloc(&request);
+}
+
+// TODO JEFF parse test for post
+// TODO JEFF parse test for delete with some interesting URI
+
 int main() {
-	header();
-	headers();
-	parse();
+	// TODO JEFF uncomment me
+	// header();
+	// headers();
+	// parse_request_get();
+	// parse_request_post_no_body();
+	parse_request_post_with_body_text();
+	// parse_request_post_with_body_json();
 	return 0;
 }
