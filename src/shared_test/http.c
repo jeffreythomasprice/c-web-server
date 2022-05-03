@@ -124,7 +124,7 @@ void assert_no_body(http_request *request) {
 void assert_body(http_request *request, char *expected_body) {
 	size_t len = strlen(expected_body);
 	assert(buffer_get_length(&request->body) == len);
-	assert(!memcmp(&request->body.data, expected_body, len));
+	assert(!memcmp(request->body.data, expected_body, len));
 }
 
 void parse_request_get() {
@@ -193,9 +193,9 @@ void parse_request_post_with_body_json() {
 										 "User-Agent: curl/7.68.0\r\n"
 										 "Accept: */*\r\n"
 										 "Content-Type: application/json\r\n"
-										 "Content-Length: 27\r\n"
+										 "Content-Length: 80\r\n"
 										 "\r\n"
-										 "{"
+										 "{\n"
 										 "\t\"foo\": \"bar\",\n"
 										 "\t\"baz\": 42,\n"
 										 "\t\"blarg\": {\n"
@@ -212,8 +212,8 @@ void parse_request_post_with_body_json() {
 	assert_header(&request, "User-Agent", 1, "curl/7.68.0");
 	assert_header(&request, "Accept", 1, "*/*");
 	assert_header(&request, "Content-Type", 1, "application/json");
-	assert_header(&request, "Content-Length", 1, "79");
-	assert_body(&request, "{"
+	assert_header(&request, "Content-Length", 1, "80");
+	assert_body(&request, "{\n"
 						  "\t\"foo\": \"bar\",\n"
 						  "\t\"baz\": 42,\n"
 						  "\t\"blarg\": {\n"
@@ -227,16 +227,15 @@ void parse_request_post_with_body_json() {
 	http_request_dealloc(&request);
 }
 
-// TODO JEFF parse test for post
+// TODO JEFF parse test for put
 // TODO JEFF parse test for delete with some interesting URI
 
 int main() {
-	// TODO JEFF uncomment me
-	// header();
-	// headers();
-	// parse_request_get();
-	// parse_request_post_no_body();
+	header();
+	headers();
+	parse_request_get();
+	parse_request_post_no_body();
 	parse_request_post_with_body_text();
-	// parse_request_post_with_body_json();
+	parse_request_post_with_body_json();
 	return 0;
 }

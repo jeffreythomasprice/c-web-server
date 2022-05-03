@@ -244,6 +244,7 @@ int http_request_parse(http_request *request, io *io) {
 							} else if (http_header_get_num_values(header) != 1) {
 								log_error("Content-Length has wrong number of values, expected 1 got %zu\n",
 										  http_header_get_num_values(header));
+								return 1;
 							} else {
 								string *value = http_header_get_value(header, 0);
 								if (sscanf(string_get_cstr(value), "%zu", &expected_content_length) == 1) {
@@ -286,29 +287,34 @@ int http_request_parse(http_request *request, io *io) {
 		}
 	}
 
-	if (found_end_of_header) {
-		buffer_append_bytes(&request->body, request->read_buf.data + start_of_body, buffer_get_length(&request->read_buf) - start_of_body);
-
-		// TODO merge trace logging into a single statement
-		string_clear(&request->scratch);
-		string_append_cstrf(&request->scratch, "received request %s %s\n", string_get_cstr(&request->method),
-							string_get_cstr(&request->method));
-		for (size_t i = 0; i < http_headers_get_num(&request->headers); i++) {
-			http_header *header = http_headers_get(&request->headers, i);
-			string_append_cstrf(&request->scratch, "    %s", string_get_cstr(http_header_get_name(header)));
-			for (size_t j = 0; j < http_header_get_num_values(header); j++) {
-				if (j > 0) {
-					string_append_cstr(&request->scratch, ", ");
-				}
-				string_append_cstrf(&request->scratch, string_get_cstr(http_header_get_value(header, j)));
-			}
-			string_append_cstr(&request->scratch, "\n");
-		}
-		string_append_cstrf(&request->scratch, "    body: %zu\n", buffer_get_length(&request->body));
-
-		if (buffer_get_length(&request->body) != expected_content_length) {
-			log_error("expected content length %zu but read %zu bytes\n", expected_content_length, buffer_get_length(&request->body));
-			return 1;
-		}
+	if (!found_end_of_header) {
+		log_error("failed to find end of headers\n");
+		return 1;
 	}
+
+	buffer_append_bytes(&request->body, request->read_buf.data + start_of_body, buffer_get_length(&request->read_buf) - start_of_body);
+
+	// TODO merge trace logging into a single statement
+	string_clear(&request->scratch);
+	string_append_cstrf(&request->scratch, "received request %s %s\n", string_get_cstr(&request->method),
+						string_get_cstr(&request->method));
+	for (size_t i = 0; i < http_headers_get_num(&request->headers); i++) {
+		http_header *header = http_headers_get(&request->headers, i);
+		string_append_cstrf(&request->scratch, "    %s", string_get_cstr(http_header_get_name(header)));
+		for (size_t j = 0; j < http_header_get_num_values(header); j++) {
+			if (j > 0) {
+				string_append_cstr(&request->scratch, ", ");
+			}
+			string_append_cstrf(&request->scratch, string_get_cstr(http_header_get_value(header, j)));
+		}
+		string_append_cstr(&request->scratch, "\n");
+	}
+	string_append_cstrf(&request->scratch, "    body: %zu\n", buffer_get_length(&request->body));
+
+	if (buffer_get_length(&request->body) != expected_content_length) {
+		log_error("expected content length %zu but read %zu bytes\n", expected_content_length, buffer_get_length(&request->body));
+		return 1;
+	}
+
+	return 0;
 }
