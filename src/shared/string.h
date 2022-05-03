@@ -7,8 +7,7 @@
 extern "C" {
 #endif
 
-typedef enum
-{
+typedef enum {
 	STRING_COMPARE_CASE_SENSITIVE = 0,
 	STRING_COMPARE_CASE_INSENSITIVE = 1
 } string_compare_mode;

@@ -272,7 +272,10 @@ int http_request_parse(http_request *request, io *io) {
 							string *value = http_header_append_value(header);
 							string_set_cstr_len(value, string_get_cstr(&request->scratch) + split_results[2],
 												split_results[3] - split_results[2]);
-							// TODO JEFF trim value
+							size_t first_non_whitespace = string_index_not_of_any_cstr(value, " \t", 0);
+							if (first_non_whitespace >= 0) {
+								string_set_substr(value, value, first_non_whitespace, string_get_length(value));
+							}
 						}
 					}
 					// skip the newline

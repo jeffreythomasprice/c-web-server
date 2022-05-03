@@ -107,6 +107,15 @@ int main() {
 	string_dealloc(&s);
 	string_dealloc(&s2);
 
+	string_init_cstr(&s, "foobarbaz");
+	string_append_substr(&s, &s, 3, 6);
+	assert(!strcmp(string_get_cstr(&s), "foobarbazbar"));
+	string_append_substr(&s, &s, 6, 9);
+	assert(!strcmp(string_get_cstr(&s), "foobarbazbarbaz"));
+	string_set_substr(&s, &s, 3, 12);
+	assert(!strcmp(string_get_cstr(&s), "barbazbar"));
+	string_dealloc(&s);
+
 	string_init_cstr(&s, "foofoobarbazbaz");
 	string_init_cstr(&s2, "bar");
 	assert(string_index_of_str(&s, &s2, 0) == 6);
@@ -157,6 +166,35 @@ int main() {
 	assert(string_reverse_index_of_char(&s, 'f', 1) == 0);
 	assert(string_reverse_index_of_char(&s, 'f', 0) == 0);
 	assert(string_reverse_index_of_char(&s, 'y', 0) == -1);
+	string_dealloc(&s);
+
+	string_init_cstr(&s, " \t foo bar baz   \t");
+	string_init_cstr(&s2, " \t");
+	assert(string_index_of_any_str(&s, &s2, 0) == 0);
+	assert(string_index_of_any_str(&s, &s2, 3) == 6);
+	assert(string_index_of_any_str(&s, &s2, 6) == 6);
+	assert(string_index_of_any_cstr(&s, " \t", 0) == 0);
+	assert(string_index_of_any_cstr(&s, " \t", 3) == 6);
+	assert(string_index_of_any_cstr(&s, " \t", 6) == 6);
+	assert(string_reverse_index_of_any_str(&s, &s2, 18) == 17);
+	assert(string_reverse_index_of_any_str(&s, &s2, 13) == 10);
+	assert(string_reverse_index_of_any_str(&s, &s2, 10) == 10);
+	assert(string_reverse_index_of_any_cstr(&s, " \t", 18) == 17);
+	assert(string_reverse_index_of_any_cstr(&s, " \t", 13) == 10);
+	assert(string_reverse_index_of_any_cstr(&s, " \t", 10) == 10);
+	assert(string_index_not_of_any_str(&s, &s2, 0) == 3);
+	assert(string_index_not_of_any_str(&s, &s2, 3) == 3);
+	assert(string_index_not_of_any_str(&s, &s2, 6) == 7);
+	assert(string_index_not_of_any_cstr(&s, " \t", 0) == 3);
+	assert(string_index_not_of_any_cstr(&s, " \t", 3) == 3);
+	assert(string_index_not_of_any_cstr(&s, " \t", 6) == 7);
+	assert(string_reverse_index_not_of_any_str(&s, &s2, 18) == 13);
+	assert(string_reverse_index_not_of_any_str(&s, &s2, 13) == 13);
+	assert(string_reverse_index_not_of_any_str(&s, &s2, 10) == 9);
+	assert(string_reverse_index_not_of_any_cstr(&s, " \t", 18) == 13);
+	assert(string_reverse_index_not_of_any_cstr(&s, " \t", 13) == 13);
+	assert(string_reverse_index_not_of_any_cstr(&s, " \t", 10) == 9);
+	string_dealloc(&s2);
 	string_dealloc(&s);
 
 	string_init_cstr(&s, "foobarbaz");

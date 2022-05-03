@@ -145,8 +145,22 @@ void string_append_substr(string *dst, string *src, size_t start, size_t end) {
 }
 
 void string_set_substr(string *dst, string *src, size_t start, size_t end) {
-	string_clear(dst);
-	string_append_substr(dst, src, start, end);
+	if (dst == src) {
+		size_t len = string_get_length(dst);
+		if (start >= end || start >= len) {
+			return;
+		}
+		if (end > len) {
+			end = len;
+		}
+		size_t substr_len = end - start;
+		memcpy(dst->b.data, src->b.data + start, substr_len);
+		dst->b.data[substr_len] = 0;
+		buffer_set_length(&dst->b, substr_len + 1);
+	} else {
+		string_clear(dst);
+		string_append_substr(dst, src, start, end);
+	}
 }
 
 size_t string_index_of_str(string *s, string *find, size_t start) {
@@ -244,42 +258,104 @@ size_t string_reverse_index_of_char(string *s, char find, size_t start) {
 }
 
 size_t string_index_of_any_str(string *s, string *find, size_t start) {
-	// TODO JEFF implement me! including tests!
-	return -1;
+	return string_index_of_any_cstr(s, string_get_cstr(find), start);
 }
 
 size_t string_index_of_any_cstr(string *s, char *find, size_t start) {
-	// TODO JEFF implement me! including tests!
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	if (start >= s_len) {
+		return -1;
+	}
+	size_t i = start;
+	for (char *sc = s->b.data + start; *sc; sc++, i++) {
+		for (char *fc = find; *fc; fc++) {
+			if (*sc == *fc) {
+				return i;
+			}
+		}
+	}
 	return -1;
 }
 
 size_t string_reverse_index_of_any_str(string *s, string *find, size_t start) {
-	// TODO JEFF implement me! including tests!
-	return -1;
+	return string_reverse_index_of_any_cstr(s, string_get_cstr(find), start);
 }
 
 size_t string_reverse_index_of_any_cstr(string *s, char *find, size_t start) {
-	// TODO JEFF implement me! including tests!
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	if (start >= s_len) {
+		start = s_len - 1;
+	}
+	size_t i = start;
+	for (char *sc = s->b.data + start; sc != (char *)s->b.data - 1; sc--, i--) {
+		for (char *fc = find; *fc; fc++) {
+			if (*sc == *fc) {
+				return i;
+			}
+		}
+	}
 	return -1;
 }
 
 size_t string_index_not_of_any_str(string *s, string *find, size_t start) {
-	// TODO JEFF implement me! including tests!
-	return -1;
+	return string_index_not_of_any_cstr(s, string_get_cstr(find), start);
 }
 
 size_t string_index_not_of_any_cstr(string *s, char *find, size_t start) {
-	// TODO JEFF implement me! including tests!
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	if (start >= s_len) {
+		return -1;
+	}
+	size_t i = start;
+	for (char *sc = s->b.data + start; *sc; sc++, i++) {
+		int found = 0;
+		for (char *fc = find; *fc; fc++) {
+			if (*sc == *fc) {
+				found = 1;
+				break;
+			}
+		}
+		if (!found) {
+			return i;
+		}
+	}
 	return -1;
 }
 
 size_t string_reverse_index_not_of_any_str(string *s, string *find, size_t start) {
-	// TODO JEFF implement me! including tests!
-	return -1;
+	return string_reverse_index_not_of_any_cstr(s, string_get_cstr(find), start);
 }
 
 size_t string_reverse_index_not_of_any_cstr(string *s, char *find, size_t start) {
-	// TODO JEFF implement me! including tests!
+	size_t s_len = string_get_length(s);
+	if (s_len == 0) {
+		return -1;
+	}
+	if (start >= s_len) {
+		start = s_len - 1;
+	}
+	size_t i = start;
+	for (char *sc = s->b.data + start; sc != (char *)s->b.data - 1; sc--, i--) {
+		int found = 0;
+		for (char *fc = find; *fc; fc++) {
+			if (*sc == *fc) {
+				found = 1;
+				break;
+			}
+		}
+		if (!found) {
+			return i;
+		}
+	}
 	return -1;
 }
 

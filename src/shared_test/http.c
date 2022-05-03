@@ -107,8 +107,6 @@ void assert_header(http_request *request, char *expected_name, size_t expected_n
 	assert(http_header_get_num_values(header) == expected_num_values);
 	for (size_t i = 0; i < expected_num_values; i++) {
 		char *expected_value = va_arg(args, char *);
-		log_trace("TODO JEFF header value at %zu = %s, expected value = %s\n", i, string_get_cstr(http_header_get_value(header, i)),
-				  expected_value);
 		assert(string_compare_cstr(http_header_get_value(header, i), expected_value, STRING_COMPARE_CASE_SENSITIVE) == 0);
 	}
 	va_end(args);
@@ -117,6 +115,8 @@ void assert_header(http_request *request, char *expected_name, size_t expected_n
 void assert_no_body(http_request *request) {
 	assert(buffer_get_length(&request->body) == 0);
 }
+
+// TODO JEFF more http request test cases
 
 void parse() {
 	http_request request;
