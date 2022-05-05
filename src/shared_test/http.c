@@ -109,11 +109,8 @@ void assert_header(http_request *request, char *expected_name, size_t expected_n
 	http_header *header = http_headers_get_cstr(&request->headers, expected_name, 0);
 	assert(header != NULL);
 	assert(string_compare_cstr(http_header_get_name(header), expected_name, STRING_COMPARE_CASE_SENSITIVE) == 0);
-	// TODO JEFF put this back
-	// assert(http_header_get_num_values(header) == expected_num_values);
+	assert(http_header_get_num_values(header) == expected_num_values);
 	for (size_t i = 0; i < expected_num_values; i++) {
-		log_trace("TODO JEFF actual header value [%i, %s] = %s\n", i, string_get_cstr(http_header_get_name(header)),
-				  string_get_cstr(http_header_get_value(header, i)));
 		char *expected_value = va_arg(args, char *);
 		assert(string_compare_cstr(http_header_get_value(header, i), expected_value, STRING_COMPARE_CASE_SENSITIVE) == 0);
 	}
@@ -272,7 +269,7 @@ void parse_request_put_with_body_text() {
 	assert_header(&request, "Accept", 1, "*/*");
 	assert_header(&request, "Content-Type", 1, "application/x-www-form-urlencoded");
 	assert_header(&request, "Content-Length", 1, "9");
-	assert_header(&request, "something", 3, "value1", "value2", "value4", "value5", "value6", "value7", "value8", "value9");
+	assert_header(&request, "something", 8, "value1", "value2", "value4", "value5", "value6", "value7", "value8", "value9");
 	assert_header(&request, "something-else", 1, "value3");
 	assert_body(&request, "some data");
 	http_request_dealloc(&request);
@@ -296,15 +293,14 @@ void parse_request_delete_no_body() {
 }
 
 int main() {
-	// TODO JEFF uncomment
-	// header();
-	// headers();
-	// parse_request_get();
-	// parse_request_post_no_body();
-	// parse_request_post_with_body_text();
-	// parse_request_post_with_body_json();
-	// parse_request_put_no_body();
+	header();
+	headers();
+	parse_request_get();
+	parse_request_post_no_body();
+	parse_request_post_with_body_text();
+	parse_request_post_with_body_json();
+	parse_request_put_no_body();
 	parse_request_put_with_body_text();
-	// parse_request_delete_no_body();
+	parse_request_delete_no_body();
 	return 0;
 }
