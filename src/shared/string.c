@@ -376,8 +376,10 @@ size_t string_split(string *s, char *delim, size_t *results, size_t results_capa
 	size_t start = 0;
 	for (size_t i = 0; i < len - delim_len; i++) {
 		if (!memcmp(s->b.data + i, delim, delim_len)) {
-			results[result_count * 2 + 0] = start;
-			results[result_count * 2 + 1] = i;
+			if (result_count < results_capacity) {
+				results[result_count * 2 + 0] = start;
+				results[result_count * 2 + 1] = i;
+			}
 			start = i + delim_len;
 			i += delim_len - 1;
 			result_count++;
@@ -387,7 +389,7 @@ size_t string_split(string *s, char *delim, size_t *results, size_t results_capa
 		}
 	}
 	if (start < len) {
-		if (result_count < max_results) {
+		if (result_count < results_capacity && result_count < max_results) {
 			results[result_count * 2 + 0] = start;
 			results[result_count * 2 + 1] = len;
 		}

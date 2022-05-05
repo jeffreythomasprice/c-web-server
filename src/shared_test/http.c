@@ -262,6 +262,7 @@ void parse_request_put_with_body_text() {
 										 "something: value1,value2\r\n"
 										 "something-else: value3\r\n"
 										 "something: value4\r\n"
+										 "something: value5,value6,value7,value8,value9\r\n"
 										 "\r\n"
 										 "some data");
 	assert_method(&request, "PUT");
@@ -271,7 +272,7 @@ void parse_request_put_with_body_text() {
 	assert_header(&request, "Accept", 1, "*/*");
 	assert_header(&request, "Content-Type", 1, "application/x-www-form-urlencoded");
 	assert_header(&request, "Content-Length", 1, "9");
-	assert_header(&request, "something", 3, "value1", "value2", "value4");
+	assert_header(&request, "something", 3, "value1", "value2", "value4", "value5", "value6", "value7", "value8", "value9");
 	assert_header(&request, "something-else", 1, "value3");
 	assert_body(&request, "some data");
 	http_request_dealloc(&request);

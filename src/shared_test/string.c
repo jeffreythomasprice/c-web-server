@@ -73,6 +73,24 @@ int main() {
 	assert(split_results[1] == 21);
 	string_dealloc(&s2);
 
+	string_set_cstr(&s, "01-23-45-67-89");
+
+	num_split_results = string_split(&s, "-", split_results, 10, 3);
+	assert(num_split_results == 3);
+	assert(split_results[0] == 0);
+	assert(split_results[1] == 2);
+	assert(split_results[2] == 3);
+	assert(split_results[3] == 5);
+	assert(split_results[4] == 6);
+	assert(split_results[5] == 14);
+
+	num_split_results = string_split(&s, "-", split_results, 2, 3);
+	assert(num_split_results == 3);
+	assert(split_results[0] == 0);
+	assert(split_results[1] == 2);
+	assert(split_results[2] == 3);
+	assert(split_results[3] == 5);
+
 	string_dealloc(&s);
 
 	string_init_cstr(&s, "abc def geh");

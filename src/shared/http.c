@@ -181,41 +181,41 @@ int http_request_parse(http_request *request, io *io) {
 						int found_start_of_protocol_version = 0;
 						int found_end_of_protocol_version = 0;
 						size_t protocol_version_start, protocol_version_end;
-						for (size_t i = 0; i < end_of_request_line; i++) {
-							int is_space = request->read_buf.data[i] == ' ';
+						for (size_t j = 0; j < end_of_request_line; j++) {
+							int is_space = request->read_buf.data[j] == ' ';
 							if (!found_start_of_method) {
 								if (!is_space) {
 									found_start_of_method = 1;
-									method_start = i;
+									method_start = j;
 								}
 							} else if (!found_end_of_method) {
 								if (is_space) {
 									found_end_of_method = 1;
-									method_end = i;
+									method_end = j;
 								}
 							} else if (!found_start_of_uri) {
 								if (!is_space) {
 									found_start_of_uri = 1;
-									uri_start = i;
+									uri_start = j;
 								}
 							} else if (!found_end_of_uri) {
 								if (is_space) {
 									found_end_of_uri = 1;
-									uri_end = i;
+									uri_end = j;
 								}
 							} else if (!found_start_of_protocol_version) {
 								if (!is_space) {
 									found_start_of_protocol_version = 1;
-									protocol_version_start = i;
+									protocol_version_start = j;
 								}
 							} else if (!found_end_of_protocol_version) {
 								if (is_space) {
 									found_end_of_protocol_version = 1;
-									protocol_version_end = i;
+									protocol_version_end = j;
 									break;
-								} else if (i == end_of_request_line - 1) {
+								} else if (j == end_of_request_line - 1) {
 									found_end_of_protocol_version = 1;
-									protocol_version_end = i + 1;
+									protocol_version_end = j + 1;
 									break;
 								}
 							}
@@ -259,8 +259,12 @@ int http_request_parse(http_request *request, io *io) {
 						} else {
 							// TODO JEFF header parsing isn't correct yet, need to split around commas
 							string_set_cstr_len(&request->scratch, request->read_buf.data + end_of_last_line, line_length);
-							size_t split_results[4];
-							size_t split_count = string_split(&request->scratch, ":", split_results, 2, 2);
+							// splitting gets used for finding multiple values separated by commas
+							// just guess a max number, and if there are more than that we'll just iterate
+							size_t max_split_results = 3;
+							size_t split_results[max_split_results * 2];
+							// there can only be 2 maximum results here separating key and value
+							size_t split_count = string_split(&request->scratch, ":", split_results, max_split_results, 2);
 							if (split_count != 2) {
 								log_error("failed to parse header line: %s\n", string_get_cstr(&request->scratch));
 								return 1;
@@ -270,12 +274,49 @@ int http_request_parse(http_request *request, io *io) {
 														  split_results[1] - split_results[0],
 														  // create this header if missing
 														  1);
-							string *value = http_header_append_value(header);
-							string_set_cstr_len(value, string_get_cstr(&request->scratch) + split_results[2],
-												split_results[3] - split_results[2]);
-							size_t first_non_whitespace = string_index_not_of_any_cstr(value, " \t", 0);
+							// scratch is now the value with any leading whitespace trimmed off
+							size_t start_of_value = split_results[2];
+							size_t first_non_whitespace = string_index_not_of_any_cstr(&request->scratch, " \t", start_of_value);
 							if (first_non_whitespace >= 0) {
-								string_set_substr(value, value, first_non_whitespace, string_get_length(value));
+								start_of_value = first_non_whitespace;
+							}
+							string_set_cstr_len(&request->scratch, string_get_cstr(&request->scratch) + start_of_value,
+												split_results[3] - start_of_value);
+							log_trace("TODO JEFF before split, value = %s\n", string_get_cstr(&request->scratch));
+
+							// best effort at splitting the value up
+							size_t total_values = string_split(&request->scratch, ",", split_results, max_split_results, max_split_results);
+							log_trace("TODO JEFF we think there are %zu values here\n", total_values);
+							while (1) {
+								// should be impossible, there must be at least one substring in the source string
+								if (total_values == 0) {
+									log_error("failed to split value string %s\n", &request->scratch);
+									return 1;
+								}
+								// if there were multiple values the last one doesn't count, it might still have separators
+								size_t real_split_count;
+								if (total_values == 1) {
+									real_split_count = total_values;
+								} else {
+									real_split_count = total_values - 1;
+								}
+								// divide up the ones we're sure of
+								size_t split;
+								for (size_t split = 0; split < real_split_count * 2; split += 2) {
+									string *value = http_header_append_value(header);
+									string_set_substr(value, &request->scratch, split_results[split], split_results[split + 1]);
+									log_trace("TODO JEFF found value %s\n", string_get_cstr(value));
+								}
+								// done because the last value must not have had any separators in it
+								if (total_values < max_split_results) {
+									break;
+								}
+								// last value might be full of separators and really be multiple values
+								// TODO JEFF could just be a split call that takes a start index
+								string_set_substr(&request->scratch, &request->scratch, split_results[split], split_results[split + 1]);
+								log_trace("TODO JEFF looping, new string to look at is %s\n", string_get_cstr(&request->scratch));
+								total_values = string_split(&request->scratch, ",", split_results, max_split_results, max_split_results);
+								log_trace("TODO JEFF new remaining splits %zu\n", total_values);
 							}
 						}
 					}
