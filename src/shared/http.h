@@ -8,8 +8,6 @@
 extern "C" {
 #endif
 
-// TODO needs tests
-
 typedef struct {
 	string name;
 	size_t values_capacity;
@@ -29,6 +27,7 @@ typedef struct {
 	string method;
 	string uri;
 	http_headers headers;
+	// TODO body of request should be a stream, not fetch all data up front
 	buffer body;
 } http_request;
 

@@ -9,11 +9,14 @@
 extern "C" {
 #endif
 
+// TODO refactor, this should be streams, not io
+
 typedef int (*io_func_read)(void *io, void *dst, size_t n, string *error);
 typedef int (*io_func_close)(void *io, string *error);
 
 typedef struct {
 	io_func_read read;
+	// TODO needs write functionality
 	io_func_close close;
 	union {
 		struct {

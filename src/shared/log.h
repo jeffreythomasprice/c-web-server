@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-// TODO disable log levels based on a preprocessor
+// TODO disable log levels based on a preprocessor or runtime config
 
 void log_trace(char *format, ...);
 void log_debug(char *format, ...);
