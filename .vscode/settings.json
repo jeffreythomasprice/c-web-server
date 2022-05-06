@@ -19,6 +19,11 @@
 		"assert.h": "c",
 		"*.tcc": "c",
 		"random": "c",
-		"istream": "c"
+		"istream": "c",
+		"fstream": "cpp",
+		"iosfwd": "cpp",
+		"iostream": "cpp",
+		"ostream": "cpp",
+		"streambuf": "cpp"
 	}
 }

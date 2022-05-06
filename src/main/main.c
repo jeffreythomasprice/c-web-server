@@ -16,7 +16,7 @@
 #define DEFAULT_WORKER_POOL_SIZE 2
 
 typedef struct {
-	io socket;
+	stream socket;
 } http_worker_task_data;
 
 int shutdown_requested;
@@ -45,8 +45,8 @@ void signal_handler(int signum) {
 void free_task_data(http_worker_task_data *data) {
 	string error;
 	string_init(&error);
-	if (io_dealloc(&data->socket, &error)) {
-		log_error("failed to close socket io: %s\n", string_get_cstr(&error));
+	if (stream_dealloc(&data->socket, &error)) {
+		log_error("failed to close socket stream: %s\n", string_get_cstr(&error));
 	}
 	string_dealloc(&error);
 	free(data);
@@ -71,7 +71,7 @@ void socket_accept(int s) {
 	// 5 seconds in nanoseconds
 	const uint64_t timeout = 5000000000llu;
 	http_worker_task_data *data = malloc(sizeof(http_worker_task_data));
-	io_init_file_descriptor(&data->socket, s, 1);
+	stream_init_file_descriptor(&data->socket, s, 1);
 	int enqueue_error = worker_thread_pool_enqueue(&http_worker_pool, http_task, data, NULL, timeout);
 	switch (enqueue_error) {
 	case 0:

@@ -1,7 +1,7 @@
 #ifndef http_h
 #define http_h
 
-#include "io.h"
+#include "stream.h"
 #include "string.h"
 
 #ifdef __cplusplus
@@ -51,10 +51,10 @@ void http_request_init(http_request *request);
 void http_request_dealloc(http_request *request);
 /**
  * Reads data from the given source until a complete HTTP document is parsed. Aborts when it's obvious that the document is malformed.
- * @param io the data source to read from
+ * @param stream the data source to read from
  * @returns 0 when successful, non-0 when any error occurs reading from the file descriptor or if the content is malformed
  */
-int http_request_parse(http_request *request, io *io);
+int http_request_parse(http_request *request, stream *stream);
 
 #ifdef __cplusplus
 }

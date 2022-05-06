@@ -12,9 +12,9 @@ add_executable(test_http http.c)
 target_link_libraries(test_http shared)
 add_test(NAME test_http COMMAND test_http)
 
-add_executable(test_io io.c)
-target_link_libraries(test_io shared)
-add_test(NAME test_io COMMAND test_io)
+add_executable(test_stream stream.c)
+target_link_libraries(test_stream shared)
+add_test(NAME test_stream COMMAND test_stream)
 
 add_executable(test_string string.c)
 target_link_libraries(test_string shared)

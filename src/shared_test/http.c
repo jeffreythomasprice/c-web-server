@@ -86,13 +86,13 @@ void headers() {
 void assert_parses_successfully(http_request *request, char *input) {
 	buffer input_buffer;
 	buffer_init_copy(&input_buffer, input, strlen(input));
-	io input_io;
-	io_init_buffer(&input_io, &input_buffer, 1);
+	stream input_io;
+	stream_init_buffer(&input_io, &input_buffer, 1);
 
 	int parse_result = http_request_parse(request, &input_io);
 	assert(parse_result == 0);
 
-	io_dealloc(&input_io, NULL);
+	stream_dealloc(&input_io, NULL);
 }
 
 void assert_method(http_request *request, char *expected) {

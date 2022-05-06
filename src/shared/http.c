@@ -138,7 +138,7 @@ void http_request_dealloc(http_request *request) {
 	buffer_dealloc(&request->body);
 }
 
-int http_request_parse(http_request *request, io *io) {
+int http_request_parse(http_request *request, stream *stream) {
 	buffer_clear(&request->read_buf);
 	string_clear(&request->method);
 	string_clear(&request->uri);
@@ -155,7 +155,7 @@ int http_request_parse(http_request *request, io *io) {
 	size_t max_read_length = MAX_SOCKET_READ_SIZE_IN_CHUNKS * CHUNK_READ_SIZE;
 	size_t expected_content_length = 0;
 	while (buffer_get_length(&request->read_buf) < max_read_length) {
-		int read_result = io_read_buffer(io, &request->read_buf, CHUNK_READ_SIZE, &request->scratch);
+		int read_result = stream_read_buffer(stream, &request->read_buf, CHUNK_READ_SIZE, &request->scratch);
 		if (read_result < 0) {
 			log_error("parsing http request failed, error reading: %s\n", string_get_cstr(&request->scratch));
 			return 1;
