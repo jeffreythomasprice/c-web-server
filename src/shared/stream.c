@@ -110,6 +110,7 @@ int stream_init_file_cstr(stream *stream, char *path, char *mode, string *error)
 	stream->close = (stream_func_close)stream_file_descriptor_close;
 	FILE *file = fopen(path, mode);
 	if (!file) {
+		fflush(stdout);
 		if (error) {
 			string_set_cstrf(error, "error opening file at \"%s\" with mode \"%s\": %s", path, mode, strerror(errno));
 		}
