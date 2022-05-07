@@ -238,8 +238,7 @@ int http_request_parse(http_request *request, stream *stream) {
 																		0);
 							if (!header) {
 								expected_content_length = 0;
-								// TODO JEFF set max read length to something sensible?
-								// max_read_length = buffer_get_length(&request->read_buf);
+								max_read_length = buffer_get_length(&request->read_buf);
 							} else if (http_header_get_num_values(header) != 1) {
 								log_error("Content-Length has wrong number of values, expected 1 got %zu\n",
 										  http_header_get_num_values(header));
@@ -247,8 +246,7 @@ int http_request_parse(http_request *request, stream *stream) {
 							} else {
 								string *value = http_header_get_value(header, 0);
 								if (sscanf(string_get_cstr(value), "%zu", &expected_content_length) == 1) {
-									// TODO JEFF set max read length to something sensible?
-									// max_read_length = i + expected_content_length;
+									max_read_length = i + expected_content_length;
 								} else {
 									log_error("Content-Length header present but isn't a valid integer: %s\n", string_get_cstr(value));
 									return 1;
