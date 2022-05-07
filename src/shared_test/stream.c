@@ -190,6 +190,63 @@ void read_all_test(size_t test_data_size, size_t expected_read_len, size_t max, 
 	buffer_dealloc(&result);
 }
 
+void write_buffer() {
+	buffer dst_buf;
+	buffer_init(&dst_buf);
+	stream dst;
+	stream_init_buffer(&dst, &dst_buf, 1);
+
+	buffer src_buf;
+	buffer_init(&src_buf);
+	buffer_append_bytes(&src_buf, "Hello, World!", 13);
+
+	assert(stream_write_buffer(&dst, &src_buf, NULL) == 13);
+	assert(memcmp(dst_buf.data, "Hello, World!", 13) == 0);
+
+	buffer_dealloc(&src_buf);
+	stream_dealloc(&dst, NULL);
+}
+
+void write_str() {
+	buffer dst_buf;
+	buffer_init(&dst_buf);
+	stream dst;
+	stream_init_buffer(&dst, &dst_buf, 1);
+
+	string src;
+	string_init_cstr(&src, "Hello, World!");
+
+	assert(stream_write_str(&dst, &src, NULL) == 13);
+	assert(memcmp(dst_buf.data, "Hello, World!", 13) == 0);
+
+	string_dealloc(&src);
+	stream_dealloc(&dst, NULL);
+}
+
+void write_cstr() {
+	buffer dst_buf;
+	buffer_init(&dst_buf);
+	stream dst;
+	stream_init_buffer(&dst, &dst_buf, 1);
+
+	assert(stream_write_cstr(&dst, "Hello, World!", NULL) == 13);
+	assert(memcmp(dst_buf.data, "Hello, World!", 13) == 0);
+
+	stream_dealloc(&dst, NULL);
+}
+
+void write_cstrf() {
+	buffer dst_buf;
+	buffer_init(&dst_buf);
+	stream dst;
+	stream_init_buffer(&dst, &dst_buf, 1);
+
+	assert(stream_write_cstrf(&dst, NULL, "foo %i bar %s", 42, "baz") == 14);
+	assert(memcmp(dst_buf.data, "foo 42 bar baz", 14) == 0);
+
+	stream_dealloc(&dst, NULL);
+}
+
 int main() {
 	srand(time(NULL));
 	file_descriptor_test();
@@ -202,5 +259,9 @@ int main() {
 	read_all_test(32768, 2000, 2000, 1024);
 	read_all_test(1500, 1500, 0, 1024);
 	read_all_test(20, 20, 0, 1);
+	write_buffer();
+	write_str();
+	write_cstr();
+	write_cstrf();
 	return 0;
 }

@@ -1,6 +1,7 @@
 #include "stream.h"
 
 #include <errno.h>
+#include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -253,4 +254,35 @@ int stream_read_all_into_buffer(stream *stream, buffer *dst, size_t max, size_t 
 		total += result;
 	}
 	return total;
+}
+
+int stream_write_buffer(stream *stream, buffer *src, string *error) {
+	return stream_write(stream, src->data, buffer_get_length(src), error);
+}
+
+int stream_write_str(stream *stream, string *src, string *error) {
+	return stream_write(stream, string_get_cstr(src), string_get_length(src), error);
+}
+
+int stream_write_cstr(stream *stream, char *src, string *error) {
+	return stream_write(stream, src, strlen(src), error);
+}
+
+int stream_write_cstrf(stream *stream, string *error, char *fmt, ...) {
+	buffer b;
+	buffer_init(&b);
+	// check how much more space we need
+	va_list args;
+	va_start(args, fmt);
+	size_t n = vsnprintf(NULL, 0, fmt, args);
+	va_end(args);
+	// resize to fit
+	buffer_set_length(&b, n + 1);
+	// write the string here
+	va_start(args, fmt);
+	vsnprintf(b.data, n + 1, fmt, args);
+	va_end(args);
+	int result = stream_write(stream, b.data, n, error);
+	buffer_dealloc(&b);
+	return result;
 }

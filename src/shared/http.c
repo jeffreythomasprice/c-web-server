@@ -120,6 +120,26 @@ http_header *http_headers_get_cstr_len(http_headers *headers, char *name, size_t
 	return result;
 }
 
+// private
+void http_headers_to_string(http_headers *headers, string *dst, char *indent) {
+	if (headers) {
+		string_append_cstrf(dst, "%sheaders, len=%zu\n", indent, http_headers_get_num(headers));
+		for (size_t i = 0; i < http_headers_get_num(headers); i++) {
+			http_header *header = http_headers_get(headers, i);
+			string_append_cstrf(dst, "%s%s%s: ", indent, indent, string_get_cstr(http_header_get_name(header)));
+			for (size_t j = 0; j < http_header_get_num_values(header); j++) {
+				if (j > 0) {
+					string_append_cstr(dst, ",");
+				}
+				string_append_cstrf(dst, string_get_cstr(http_header_get_value(header, j)));
+			}
+			string_append_cstr(dst, "\n");
+		}
+	} else {
+		string_append_cstrf(dst, "%sheaders, 0\n", indent);
+	}
+}
+
 void http_request_init(http_request *request) {
 	buffer_init(&request->read_buf);
 	string_init(&request->scratch);
@@ -310,17 +330,7 @@ int http_request_parse(http_request *request, stream *stream) {
 
 	string_clear(&request->scratch);
 	string_append_cstrf(&request->scratch, "parsed request %s %s\n", string_get_cstr(&request->method), string_get_cstr(&request->uri));
-	for (size_t i = 0; i < http_headers_get_num(&request->headers); i++) {
-		http_header *header = http_headers_get(&request->headers, i);
-		string_append_cstrf(&request->scratch, "    %s: ", string_get_cstr(http_header_get_name(header)));
-		for (size_t j = 0; j < http_header_get_num_values(header); j++) {
-			if (j > 0) {
-				string_append_cstr(&request->scratch, ",");
-			}
-			string_append_cstrf(&request->scratch, string_get_cstr(http_header_get_value(header, j)));
-		}
-		string_append_cstr(&request->scratch, "\n");
-	}
+	http_headers_to_string(&request->headers, &request->scratch, "    ");
 	string_append_cstrf(&request->scratch, "    body: %zu bytes\n", buffer_get_length(&request->body));
 	log_trace("%s\n", string_get_cstr(&request->scratch));
 
@@ -333,15 +343,125 @@ int http_request_parse(http_request *request, stream *stream) {
 }
 
 int http_response_write(stream *dst, int status_code, http_headers *headers) {
-	// TODO JEFF write status line
+	string scratch, error;
+	string_init(&scratch);
+	string_init(&error);
+	int result;
+
+	string_append_cstrf(&scratch, "    status_code %i\n", status_code);
+	http_headers_to_string(headers, &scratch, "    ");
+	log_trace("TODO JEFF http_response_write\n%s\n", string_get_cstr(&scratch));
+
+	char *reason_phrase;
+	switch (status_code) {
+	case 100:
+		reason_phrase = "Continue";
+		break;
+	case 101:
+		reason_phrase = "Switching Protocols";
+		break;
+	case 200:
+		reason_phrase = "OK";
+		break;
+		/*
+		TODO JEFF rest of the reason phrases
+		  | "201"  ; Section 10.2.2: Created
+		  | "202"  ; Section 10.2.3: Accepted
+		  | "203"  ; Section 10.2.4: Non-Authoritative Information
+		  | "204"  ; Section 10.2.5: No Content
+		  | "205"  ; Section 10.2.6: Reset Content
+		  | "206"  ; Section 10.2.7: Partial Content
+		  | "300"  ; Section 10.3.1: Multiple Choices
+		  | "301"  ; Section 10.3.2: Moved Permanently
+		  | "302"  ; Section 10.3.3: Found
+		  | "303"  ; Section 10.3.4: See Other
+		  | "304"  ; Section 10.3.5: Not Modified
+		  | "305"  ; Section 10.3.6: Use Proxy
+		  | "307"  ; Section 10.3.8: Temporary Redirect
+		  | "400"  ; Section 10.4.1: Bad Request
+		  | "401"  ; Section 10.4.2: Unauthorized
+		  | "402"  ; Section 10.4.3: Payment Required
+		  | "403"  ; Section 10.4.4: Forbidden
+		  | "404"  ; Section 10.4.5: Not Found
+		  | "405"  ; Section 10.4.6: Method Not Allowed
+		  | "406"  ; Section 10.4.7: Not Acceptable
+			| "407"  ; Section 10.4.8: Proxy Authentication Required
+		  | "408"  ; Section 10.4.9: Request Time-out
+		  | "409"  ; Section 10.4.10: Conflict
+		  | "410"  ; Section 10.4.11: Gone
+		  | "411"  ; Section 10.4.12: Length Required
+		  | "412"  ; Section 10.4.13: Precondition Failed
+		  | "413"  ; Section 10.4.14: Request Entity Too Large
+		  | "414"  ; Section 10.4.15: Request-URI Too Large
+		  | "415"  ; Section 10.4.16: Unsupported Media Type
+		  | "416"  ; Section 10.4.17: Requested range not satisfiable
+		  | "417"  ; Section 10.4.18: Expectation Failed
+		  | "500"  ; Section 10.5.1: Internal Server Error
+		  | "501"  ; Section 10.5.2: Not Implemented
+		  | "502"  ; Section 10.5.3: Bad Gateway
+		  | "503"  ; Section 10.5.4: Service Unavailable
+		  | "504"  ; Section 10.5.5: Gateway Time-out
+		  | "505"  ; Section 10.5.6: HTTP Version not supported
+	*/
+	default:
+		reason_phrase = "Other";
+	}
+
+	// status line
+	if (stream_write_cstrf(dst, &error, "HTTP/1.1 %i %s\r\n", status_code, reason_phrase) < 0) {
+		log_error("error writing status line: %s\n", string_get_cstr(&error));
+		result = 1;
+		goto DONE;
+	}
+
 	// TODO JEFF write headers
-	return 1;
+
+	// success
+	result = 0;
+DONE:
+	string_dealloc(&error);
+	string_dealloc(&scratch);
+	return result;
 }
 
 int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len) {
-	if (!body || body_len == 0) {
-		return http_response_write(dst, status_code, headers);
+	// headers are optionally, but we might need to create some if we have a response body
+	http_headers local_headers;
+	int should_dealloc_headers = 0;
+	if (body && body_len > 0) {
+		// allocate some headers if needed
+		if (!headers) {
+			http_headers_init(&local_headers);
+			should_dealloc_headers = 1;
+			headers = &local_headers;
+		}
+		// update content length to match the given body
+		http_header *content_length_header = http_headers_get_cstr(headers, "Content-Length", 1);
+		http_header_clear(content_length_header);
+		string *content_length_value = http_header_append_value(content_length_header);
+		string_append_cstrf(content_length_value, "%zu", body_len);
 	}
+	// write everything but the body
+	int result = http_response_write(dst, status_code, headers);
+	if (result) {
+		goto DONE;
+	}
+	// write the body
+	string error;
+	string_init(&error);
+	result = stream_write(dst, body, body_len, &error);
+	if (result < 0) {
+		log_error("error writing response body to stream: %s\n", string_get_cstr(&error));
+		goto DONE;
+	}
+	string_dealloc(&error);
+	// success
+	result = 0;
+DONE:
+	if (should_dealloc_headers) {
+		http_headers_dealloc(&local_headers);
+	}
+	return result;
 }
 
 int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body) {

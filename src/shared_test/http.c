@@ -292,7 +292,18 @@ void parse_request_delete_no_body() {
 	http_request_dealloc(&request);
 }
 
-// TODO JEFF test for http_response_write
+void response_no_headers_no_body(int status_code, char *expected_response) {
+	buffer b;
+	stream s;
+	buffer_init(&b);
+	stream_init_buffer(&s, &b, 1);
+
+	assert(http_response_write(&s, status_code, NULL) == 0);
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+
+	stream_dealloc(&s, NULL);
+}
+
 // TODO JEFF test for http_response_write_data
 // TODO JEFF test for http_response_write_buffer
 // TODO JEFF test for http_response_write_str
@@ -309,5 +320,7 @@ int main() {
 	parse_request_put_no_body();
 	parse_request_put_with_body_text();
 	parse_request_delete_no_body();
+	response_no_headers_no_body(200, "HTTP/1.1 200 OK\r\n");
+	// TODO JEFF more versions of response testing
 	return 0;
 }

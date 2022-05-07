@@ -100,6 +100,25 @@ int stream_read_buffer(stream *stream, buffer *dst, size_t n, string *error);
  */
 int stream_read_all_into_buffer(stream *stream, buffer *dst, size_t max, size_t block_size, string *error);
 
+/**
+ * As stream_write, but from a buffer.
+ */
+int stream_write_buffer(stream *stream, buffer *src, string *error);
+/**
+ * As stream_write, but from a string.
+ */
+int stream_write_str(stream *stream, string *src, string *error);
+/**
+ * As stream_write, but from a 0-terminated c string.
+ */
+int stream_write_cstr(stream *stream, char *src, string *error);
+/**
+ * As stream_write, but from a temporary string produced and filled with the formatting c-string.
+ *
+ * Note that the optional return error is before the format string, to leave the format string next to the varargs.
+ */
+int stream_write_cstrf(stream *stream, string *error, char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif

@@ -56,11 +56,41 @@ void http_request_dealloc(http_request *request);
  */
 int http_request_parse(http_request *request, stream *stream);
 
+/**
+ * Writes the given status and headers to the destination stream
+ * @param dst where to write the response to
+ * @param status_code the HTTP status code
+ * @param headers optional, the headers to include in the response
+ * @returns 0 when successful, non-0 for failure
+ */
 int http_response_write(stream *dst, int status_code, http_headers *headers);
+/**
+ * As http_response_write, but also writes the given body if provided. If a body is provided, the Content-Length header is updated to match
+ * the length.
+ * @param dst where to write the response to
+ * @param status_code the HTTP status code
+ * @param headers optional, the headers to include in the response
+ * @param body optional, the body to include in the response
+ * @param body_len if body is provided must be set to the length of the body
+ * @returns 0 when successful, non-0 for failure
+ */
 int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len);
+/**
+ * As http_response_write_data, but provide the body as a buffer.
+ */
 int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body);
+/**
+ * As http_response_write_data, but provide the body as a string.
+ */
 int http_response_write_str(stream *dst, int status_code, http_headers *headers, string *body);
+/**
+ * As http_response_write_data, but provide the body as a 0-terminated c string.
+ */
 int http_response_write_cstr(stream *dst, int status_code, http_headers *headers, char *body);
+/**
+ * As http_response_write_data, but provide the body as a stream. Available bytes from the stream are read into temporary buffer first so
+ * the full length can be calculated.
+ */
 int http_response_write_stream(stream *dst, int status_code, http_headers *headers, stream *body);
 
 #ifdef __cplusplus
