@@ -257,7 +257,7 @@ int http_request_parse(http_request *request, stream *stream) {
 							string_set_cstr_len(&request->scratch, request->read_buf.data + end_of_last_line, line_length);
 							size_t split_results[4];
 							// there can only be 2 maximum results here separating key and value
-							size_t split_count = string_split(&request->scratch, ":", split_results, 2, 2);
+							size_t split_count = string_split(&request->scratch, 0, ":", split_results, 2, 2);
 							if (split_count != 2) {
 								log_error("failed to parse header line: %s\n", string_get_cstr(&request->scratch));
 								return 1;
@@ -276,7 +276,7 @@ int http_request_parse(http_request *request, stream *stream) {
 							string_set_cstr_len(&request->scratch, string_get_cstr(&request->scratch) + start_of_value,
 												split_results[3] - start_of_value);
 							// split off the first value by looking for a comma
-							size_t num_value_splits = string_split(&request->scratch, ",", split_results, 2, 2);
+							size_t num_value_splits = string_split(&request->scratch, 0, ",", split_results, 2, 2);
 							while (1) {
 								// there can only be exactly 1 or 2 such splits, either there was a comma or there wasn't
 								// in either case the first result in the splits will be the next value
@@ -285,9 +285,7 @@ int http_request_parse(http_request *request, stream *stream) {
 								// if we had a 2nd value that means there is at least one more value
 								// since we were only allowing a max of 2 results there might still be multiple values packed in here
 								if (num_value_splits == 2) {
-									// TODO JEFF use a version of split that takes a start index instead of copying substrings
-									string_set_substr(&request->scratch, &request->scratch, split_results[2], split_results[3]);
-									num_value_splits = string_split(&request->scratch, ",", split_results, 2, 2);
+									num_value_splits = string_split(&request->scratch, split_results[2], ",", split_results, 2, 2);
 								} else {
 									// we're done there was only 1 split
 									break;
@@ -332,4 +330,55 @@ int http_request_parse(http_request *request, stream *stream) {
 	}
 
 	return 0;
+}
+
+int http_response_write(stream *dst, int status_code, http_headers *headers) {
+	// TODO JEFF write status line
+	// TODO JEFF write headers
+	return 1;
+}
+
+int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len) {
+	if (!body || body_len == 0) {
+		return http_response_write(dst, status_code, headers);
+	}
+}
+
+int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body) {
+	if (!body || buffer_get_length(body) == 0) {
+		return http_response_write(dst, status_code, headers);
+	}
+	return http_response_write_data(dst, status_code, headers, body->data, body->length);
+}
+
+int http_response_write_str(stream *dst, int status_code, http_headers *headers, string *body) {
+	if (!body || string_get_length(body) == 0) {
+		return http_response_write(dst, status_code, headers);
+	}
+	return http_response_write_data(dst, status_code, headers, string_get_cstr(body), string_get_length(body));
+}
+
+int http_response_write_cstr(stream *dst, int status_code, http_headers *headers, char *body) {
+	size_t len = 0;
+	if (body) {
+		len = strlen(body);
+	}
+	if (!body || len == 0) {
+		return http_response_write(dst, status_code, headers);
+	}
+	return http_response_write_data(dst, status_code, headers, body, len);
+}
+
+int http_response_write_stream(stream *dst, int status_code, http_headers *headers, stream *body) {
+	if (!body) {
+		return http_response_write(dst, status_code, headers);
+	}
+	buffer b;
+	buffer_init(&b);
+	int result = stream_read_all_into_buffer(body, &b, 0, 1024, NULL);
+	if (result > 0) {
+		result = http_response_write_buffer(dst, status_code, headers, &b);
+	}
+	buffer_dealloc(&b);
+	return result;
 }

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 #include "../shared/stream.h"
@@ -167,10 +168,39 @@ void buffered_reader_test() {
 	stream_dealloc(&stream, NULL);
 }
 
+void read_all_test(size_t test_data_size, size_t expected_read_len, size_t max, size_t block_size) {
+	buffer test_data, result;
+	buffer_init(&test_data);
+	buffer_init(&result);
+
+	buffer_set_length(&test_data, test_data_size);
+	for (size_t i = 0; i < test_data_size; i++) {
+		test_data.data[i] = rand();
+	}
+
+	stream s;
+	stream_init_buffer(&s, &test_data, 0);
+	assert(stream_read_all_into_buffer(&s, &result, max, block_size, NULL) == expected_read_len);
+	stream_dealloc(&s, NULL);
+
+	assert(buffer_get_length(&result) == expected_read_len);
+	assert(memcmp(result.data, test_data.data, expected_read_len) == 0);
+
+	buffer_dealloc(&test_data);
+	buffer_dealloc(&result);
+}
+
 int main() {
+	srand(time(NULL));
 	file_descriptor_test();
 	file_name_test();
 	buffer_test();
 	buffered_reader_test();
+	read_all_test(1024, 1024, 0, 1024);
+	read_all_test(512, 512, 0, 1024);
+	read_all_test(32768, 32768, 0, 1024);
+	read_all_test(32768, 2000, 2000, 1024);
+	read_all_test(1500, 1500, 0, 1024);
+	read_all_test(20, 20, 0, 1);
 	return 0;
 }

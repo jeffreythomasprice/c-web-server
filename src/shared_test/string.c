@@ -47,7 +47,7 @@ int main() {
 
 	size_t split_results[10];
 	string_init_cstr(&s2, "  ");
-	size_t num_split_results = string_split(&s, "  ", split_results, 5, 0);
+	size_t num_split_results = string_split(&s, 0, "  ", split_results, 5, 0);
 	assert(num_split_results == 5);
 	assert(split_results[0] == 0);
 	assert(split_results[1] == 3);
@@ -59,7 +59,7 @@ int main() {
 	assert(split_results[7] == 17);
 	assert(split_results[8] == 19);
 	assert(split_results[9] == 21);
-	num_split_results = string_split(&s, "  ", split_results, 10, 3);
+	num_split_results = string_split(&s, 0, "  ", split_results, 10, 3);
 	assert(num_split_results == 3);
 	assert(split_results[0] == 0);
 	assert(split_results[1] == 3);
@@ -67,7 +67,7 @@ int main() {
 	assert(split_results[3] == 8);
 	assert(split_results[4] == 10);
 	assert(split_results[5] == 21);
-	num_split_results = string_split(&s, "     ", split_results, 10, 0);
+	num_split_results = string_split(&s, 0, "     ", split_results, 10, 0);
 	assert(num_split_results == 1);
 	assert(split_results[0] == 0);
 	assert(split_results[1] == 21);
@@ -75,7 +75,7 @@ int main() {
 
 	string_set_cstr(&s, "01-23-45-67-89");
 
-	num_split_results = string_split(&s, "-", split_results, 10, 3);
+	num_split_results = string_split(&s, 0, "-", split_results, 10, 3);
 	assert(num_split_results == 3);
 	assert(split_results[0] == 0);
 	assert(split_results[1] == 2);
@@ -84,12 +84,26 @@ int main() {
 	assert(split_results[4] == 6);
 	assert(split_results[5] == 14);
 
-	num_split_results = string_split(&s, "-", split_results, 2, 3);
+	num_split_results = string_split(&s, 0, "-", split_results, 2, 3);
 	assert(num_split_results == 3);
 	assert(split_results[0] == 0);
 	assert(split_results[1] == 2);
 	assert(split_results[2] == 3);
 	assert(split_results[3] == 5);
+
+	num_split_results = string_split(&s, 1, "-", split_results, 3, 3);
+	assert(num_split_results == 3);
+	assert(split_results[0] == 1);
+	assert(split_results[1] == 2);
+	assert(split_results[2] == 3);
+	assert(split_results[3] == 5);
+	assert(split_results[4] == 6);
+	assert(split_results[5] == 14);
+
+	num_split_results = string_split(&s, 13, "-", split_results, 3, 3);
+	assert(num_split_results == 1);
+	assert(split_results[0] == 13);
+	assert(split_results[1] == 14);
 
 	string_dealloc(&s);
 

@@ -359,22 +359,22 @@ size_t string_reverse_index_not_of_any_cstr(string *s, char *find, size_t start)
 	return -1;
 }
 
-size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results) {
+size_t string_split(string *s, size_t start, char *delim, size_t *results, size_t results_capacity, size_t max_results) {
 	if (max_results == 0) {
 		max_results = -1;
 	}
 	size_t len = string_get_length(s);
+	size_t remaining_len = len - start;
 	size_t delim_len = strlen(delim);
-	if (delim_len > len) {
+	if (delim_len > remaining_len) {
 		if (results_capacity >= 1) {
-			results[0] = 0;
+			results[0] = start;
 			results[1] = len;
 		}
 		return 1;
 	}
 	size_t result_count = 0;
-	size_t start = 0;
-	for (size_t i = 0; i < len - delim_len; i++) {
+	for (size_t i = start; i < len - delim_len; i++) {
 		if (!memcmp(s->b.data + i, delim, delim_len)) {
 			if (result_count < results_capacity) {
 				results[result_count * 2 + 0] = start;

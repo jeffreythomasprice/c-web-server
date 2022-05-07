@@ -210,13 +210,14 @@ size_t string_reverse_index_not_of_any_cstr(string *s, char *find, size_t start)
  * as infinite matches.
  *
  * @param s the string to spllit
+ * @param start the index in s to start looking for results
  * @param delim a delimiter to check for
  * @param results an array of indices to fill in, in pairs for the start and end index of each substring
  * @param results_capacity the size of results, divided by two (i.e. the number of results, not the number of indices)
  * @param max_results the maximum number of results to produce
  * @returns the number of strings that would be produced, which may be more than results_capacity
  */
-size_t string_split(string *s, char *delim, size_t *results, size_t results_capacity, size_t max_results);
+size_t string_split(string *s, size_t start, char *delim, size_t *results, size_t results_capacity, size_t max_results);
 
 /**
  * @return zero if the two strings are equal, a negative value if a should be sorted before b, or a positive value if b should be sorted

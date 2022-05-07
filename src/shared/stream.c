@@ -232,3 +232,25 @@ int stream_read_buffer(stream *stream, buffer *dst, size_t n, string *error) {
 	}
 	return result;
 }
+
+int stream_read_all_into_buffer(stream *stream, buffer *dst, size_t max, size_t block_size, string *error) {
+	size_t total = 0;
+	while (1) {
+		size_t next_read = block_size;
+		if (max > 0 && total + next_read > max) {
+			next_read = max - total;
+		}
+		if (next_read == 0) {
+			break;
+		}
+		int result = stream_read_buffer(stream, dst, next_read, error);
+		if (result < 0) {
+			return result;
+		}
+		if (result == 0 || (max > 0 && total >= max)) {
+			break;
+		}
+		total += result;
+	}
+	return total;
+}

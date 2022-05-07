@@ -56,6 +56,13 @@ void http_request_dealloc(http_request *request);
  */
 int http_request_parse(http_request *request, stream *stream);
 
+int http_response_write(stream *dst, int status_code, http_headers *headers);
+int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len);
+int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body);
+int http_response_write_str(stream *dst, int status_code, http_headers *headers, string *body);
+int http_response_write_cstr(stream *dst, int status_code, http_headers *headers, char *body);
+int http_response_write_stream(stream *dst, int status_code, http_headers *headers, stream *body);
+
 #ifdef __cplusplus
 }
 #endif

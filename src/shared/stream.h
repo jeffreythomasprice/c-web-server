@@ -90,6 +90,15 @@ int stream_write(stream *stream, void *src, size_t n, string *error);
  * As stream_read, but reads into the given buffer. Expands the buffer as needed to fill in new data.
  */
 int stream_read_buffer(stream *stream, buffer *dst, size_t n, string *error);
+/**
+ * Repeatedly calls stream_read_buffer until no more data is available in this stream.
+ * @param dst where to write data to
+ * @param max the maximum number of bytes to read, 0 indicates no limit
+ * @param block_size the maximum size of a chunk of data to read at once
+ * @param error optional, if provided and an error occurs the contents are replaced with an error message
+ * @returns as per fwrite or write, positive values indicate bytes written, negative values indiciate errors
+ */
+int stream_read_all_into_buffer(stream *stream, buffer *dst, size_t max, size_t block_size, string *error);
 
 #ifdef __cplusplus
 }
