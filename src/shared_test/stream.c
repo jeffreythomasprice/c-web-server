@@ -100,9 +100,77 @@ void buffer_test() {
 	stream_dealloc(&stream, NULL);
 }
 
+void buffered_reader_test() {
+	buffer input_buffer;
+	buffer_init(&input_buffer);
+	stream input_stream;
+	stream_init_buffer(&input_stream, &input_buffer, 1);
+
+	stream_write(&input_stream, "Hello, World!", 13, NULL);
+	stream_set_position(&input_stream, 0);
+
+	stream stream;
+	stream_init_buffered_reader(&stream, &input_stream, 1);
+
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 0);
+	assert(input_stream.buffer.position == 0);
+	assert(stream_get_position(&stream) == 0);
+	assert(stream_get_length(&stream) == 0);
+
+	buffer dst;
+	buffer_init(&dst);
+
+	assert(stream_read_buffer(&stream, &dst, 3, NULL) == 3);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 3);
+	assert(input_stream.buffer.position == 3);
+	assert(buffer_get_length(&dst) == 3);
+	assert(memcmp(dst.data, "Hel", 3) == 0);
+
+	assert(stream_read_buffer(&stream, &dst, 4, NULL) == 4);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 7);
+	assert(input_stream.buffer.position == 7);
+	assert(buffer_get_length(&dst) == 7);
+	assert(memcmp(dst.data, "Hello, ", 7) == 0);
+
+	assert(stream_set_position(&stream, 4) == 4);
+	buffer_set_length(&dst, 0);
+	assert(stream_read_buffer(&stream, &dst, 7, NULL) == 7);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 11);
+	assert(input_stream.buffer.position == 11);
+	assert(buffer_get_length(&dst) == 7);
+	assert(memcmp(dst.data, "o, Worl", 7) == 0);
+
+	assert(stream_read_buffer(&stream, &dst, 20, NULL) == 2);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 13);
+	assert(input_stream.buffer.position == 13);
+	assert(buffer_get_length(&dst) == 9);
+	assert(memcmp(dst.data, "o, World!", 9) == 0);
+
+	assert(stream_read_buffer(&stream, &dst, 20, NULL) == 0);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 13);
+	assert(input_stream.buffer.position == 13);
+	assert(buffer_get_length(&dst) == 9);
+	assert(memcmp(dst.data, "o, World!", 9) == 0);
+
+	assert(stream_set_position(&stream, 999) == 13);
+	assert(stream_set_position(&stream, 2) == 2);
+	buffer_set_length(&dst, 0);
+	assert(stream_read_buffer(&stream, &dst, 20, NULL) == 11);
+	assert(buffer_get_length(&stream.buffered_reader.buffer) == 13);
+	assert(input_stream.buffer.position == 13);
+	assert(memcmp(dst.data, "llo, World!", 13) == 0);
+
+	assert(stream_set_position(&stream, 0) == 0);
+	assert(stream_write(&stream, "foo", 3, NULL) == -1);
+
+	buffer_dealloc(&dst);
+	stream_dealloc(&stream, NULL);
+}
+
 int main() {
-	// file_descriptor_test();
+	file_descriptor_test();
 	file_name_test();
-	// buffer_test();
+	buffer_test();
+	buffered_reader_test();
 	return 0;
 }
