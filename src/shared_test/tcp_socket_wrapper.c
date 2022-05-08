@@ -16,19 +16,19 @@ The data sent is prefixed with a 2-byte length.
 #include <string.h>
 #include <unistd.h>
 
-void socket_accept(void *data, int s) {
+void socket_accept(void *data, char *address, uint16_t port, int socket) {
 	assert(*((int *)data) == 42);
 
 	// read the length header
 	uint16_t len;
-	int result = read(s, &len, 2);
+	int result = read(socket, &len, 2);
 	if (result != 2) {
 		if (result < 0) {
 			log_error("receiving request data, error reading length for packet %i\n", errno);
 		} else {
 			log_error("receiving request data, expected to read 2 bytes, got %i\n", result);
 		}
-		close(s);
+		close(socket);
 		return;
 	}
 	// convert to local byte order
@@ -36,7 +36,7 @@ void socket_accept(void *data, int s) {
 	log_trace("request length %i\n", (int)len);
 	// read the actual data
 	uint8_t *buffer = malloc(len);
-	result = read(s, buffer, len);
+	result = read(socket, buffer, len);
 	if (result != len) {
 		if (result < 0) {
 			log_error("receiving request data, error reading data for packet %i\n", errno);
@@ -44,7 +44,7 @@ void socket_accept(void *data, int s) {
 			log_error("receiving request data, expected to read %i bytes, got %i\n", (int)len, result);
 		}
 		free(buffer);
-		close(s);
+		close(socket);
 		return;
 	}
 	// modify data for test
@@ -53,7 +53,7 @@ void socket_accept(void *data, int s) {
 	}
 	// send the data back to the caller, including the length
 	len = htons(len);
-	result = write(s, &len, 2);
+	result = write(socket, &len, 2);
 	len = ntohs(len);
 	if (result != 2) {
 		if (result < 0) {
@@ -62,10 +62,10 @@ void socket_accept(void *data, int s) {
 			log_error("sending response data, expected to write 2 bytes, got %i\n", result);
 		}
 		free(buffer);
-		close(s);
+		close(socket);
 		return;
 	}
-	result = write(s, buffer, len);
+	result = write(socket, buffer, len);
 	if (result != len) {
 		if (result < 0) {
 			log_error("sending response data, error writing data for packet %i\n", errno);
@@ -73,11 +73,11 @@ void socket_accept(void *data, int s) {
 			log_error("sending response data, expected to write %i bytes, got %i\n", (int)len, result);
 		}
 		free(buffer);
-		close(s);
+		close(socket);
 		return;
 	}
 	free(buffer);
-	close(s);
+	close(socket);
 }
 
 int send_test_data() {

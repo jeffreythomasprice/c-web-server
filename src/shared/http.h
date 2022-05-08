@@ -82,7 +82,8 @@ string *http_request_get_method(http_request *request);
 string *http_request_get_uri(http_request *request);
 http_headers *http_request_get_headers(http_request *request);
 /**
- * Reads data from the given source until a complete HTTP document is parsed. Aborts when it's obvious that the document is malformed.
+ * Clears all data from this request ahead of time and replaces it with new data parsed from the input stream. Aborts when it's obvious that
+ * the document is malformed.
  * @param stream the data source to read from
  * @returns 0 when successful, non-0 when any error occurs reading from the stream or if the content is malformed
  */

@@ -58,11 +58,12 @@ void *tcp_socket_wrapper_thread(void *data) {
 			continue;
 		}
 
-		char request_address_str[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &request_address.sin_addr, request_address_str, INET_ADDRSTRLEN);
-		log_trace("incoming request from %s:%i\n", request_address_str, ntohs(request_address.sin_port));
+		char request_address_str[(INET_ADDRSTRLEN > INET6_ADDRSTRLEN ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN) + 1];
+		inet_ntop(request_address.sin_family, &request_address.sin_addr, request_address_str, sizeof(request_address_str));
+		uint16_t request_port = ntohs(request_address.sin_port);
+		log_trace("incoming request from %s:%i\n", request_address_str, request_port);
 
-		sock_wrap->callback(sock_wrap->callback_data, accepted_socket);
+		sock_wrap->callback(sock_wrap->callback_data, request_address_str, request_port, accepted_socket);
 	}
 
 	log_trace("tcp_socket_wrapper_thread done\n");

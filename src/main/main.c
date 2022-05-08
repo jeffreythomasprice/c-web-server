@@ -35,7 +35,8 @@ void signal_handler(int signum) {
 
 int handle_request(void *data, http_request *request, http_response *response) {
 	// TODO some real HTTP request-response stuff
-	log_trace("TODO JEFF implement some real example\n");
+	stream_write_cstrf(http_response_get_body(response), NULL, "Received request at URI: %s\n",
+					   string_get_cstr(http_request_get_uri(request)));
 	return 0;
 }
 

@@ -1,4 +1,6 @@
+#include <arpa/inet.h>
 #include <errno.h>
+#include <netinet/in.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -364,12 +366,17 @@ void http_response_init(http_response *response) {
 }
 
 void http_response_dealloc(http_response *response) {
+	log_trace("TODO JEFF 1\n");
 	http_headers_dealloc(&response->headers);
+	log_trace("TODO JEFF 2\n");
 	buffer_dealloc(&response->body_buffer);
+	log_trace("TODO JEFF 3\n");
 	if (stream_dealloc(&response->body_stream, &response->scratch)) {
 		log_error("error deallocating response body stream: %s\n", &response->scratch);
 	}
+	log_trace("TODO JEFF 4\n");
 	string_dealloc(&response->scratch);
+	log_trace("TODO JEFF 5\n");
 }
 
 void http_response_clear(http_response *response) {
@@ -612,6 +619,8 @@ int http_response_write(http_response *response, stream *stream) {
 typedef struct {
 	http_server *server;
 	string scratch;
+	string request_address;
+	uint16_t request_port;
 	http_request request;
 	http_response response;
 	int socket;
@@ -620,6 +629,8 @@ typedef struct {
 
 // private
 void http_server_finalize_task(http_server_task_data *data) {
+	log_trace("responding to request %s:%i %s %s\n", string_get_cstr(&data->request_address), data->request_port,
+			  string_get_cstr(http_request_get_method(&data->request)), string_get_cstr(http_request_get_uri(&data->request)));
 	if (http_response_write(&data->response, &data->socket_stream)) {
 		log_error("failed to write HTTP response to the socket stream\n");
 	}
@@ -632,6 +643,7 @@ void http_server_finalize_task(http_server_task_data *data) {
 
 	// TODO JEFF put task back on pool
 	string_dealloc(&data->scratch);
+	string_dealloc(&data->request_address);
 	http_request_dealloc(&data->request);
 	http_response_dealloc(&data->response);
 	free(data);
@@ -641,29 +653,56 @@ void http_server_finalize_task(http_server_task_data *data) {
 int http_server_task(int thread_id, void *data) {
 	http_server_task_data *task_data = data;
 
+	// parse the input
+	log_trace("parsing incoming HTTP request from %s:%i\n", string_get_cstr(&task_data->request_address), task_data->request_port);
+	if (http_request_parse(&task_data->request, &task_data->socket_stream)) {
+		// failed to even read the input document, just return an error telling the client they did this wrong
+		log_error("error parsing HTTP data\n");
+		http_response_clear(&task_data->response);
+		http_response_set_status_code(&task_data->response, 400);
+		goto DONE;
+	}
+
+	// try to handle this with the user-provided callback
+	http_response_clear(&task_data->response);
+	log_trace("handling HTTP request from %s:%i %s %s\n", string_get_cstr(&task_data->request_address), task_data->request_port,
+			  string_get_cstr(http_request_get_method(&task_data->request)), string_get_cstr(http_request_get_uri(&task_data->request)));
 	if (task_data->server->callback(task_data->server->callback_data, &task_data->request, &task_data->response)) {
 		// something bad happened in the handler, just return a generic error
 		log_debug("HTTP handler failed\n");
 		http_response_clear(&task_data->response);
 		http_response_set_status_code(&task_data->response, 500);
+		goto DONE;
 	}
 
+DONE:
 	http_server_finalize_task(task_data);
 	return 0;
 }
 
 // private
-void http_server_socket_accept(void *data, int s) {
+void http_server_socket_accept(void *data, char *address, uint16_t port, int socket) {
 	http_server *server = data;
 
 	// TODO JEFF grab tasks off a pool
+	// allocate a new task
 	http_server_task_data *task_data = malloc(sizeof(http_server_task_data));
 	task_data->server = server;
 	string_init(&task_data->scratch);
+	string_init(&task_data->request_address);
 	http_request_init(&task_data->request);
 	http_response_init(&task_data->response);
-	task_data->socket = s;
-	stream_init_file_descriptor(&task_data->socket_stream, s, 1);
+
+	// remember where this request came from
+	string_set_cstr(&task_data->request_address, address);
+	task_data->request_port = port;
+	log_trace("queuing incoming HTTP request from %s:%i\n", string_get_cstr(&task_data->request_address), task_data->request_port);
+
+	// fill in the socket on the task
+	task_data->socket = socket;
+	stream_init_file_descriptor(&task_data->socket_stream, socket, 1);
+
+	// try to handle this on the thread pool
 	int enqueue_error = worker_thread_pool_enqueue(&server->thread_pool, http_server_task, task_data, NULL, server->timeout);
 	int should_finalize_task = 0;
 	switch (enqueue_error) {
@@ -693,6 +732,8 @@ void http_server_socket_accept(void *data, int s) {
 		should_finalize_task = 1;
 		break;
 	}
+	// if we had some kind of error that means we're going to need to respond ourselves, instead of letter the user callback handle it, we
+	// can do so here
 	if (should_finalize_task) {
 		http_server_finalize_task(task_data);
 	}

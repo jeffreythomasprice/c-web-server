@@ -30,6 +30,7 @@
 		"system_error": "c",
 		"limits": "c",
 		"new": "c",
-		"stdexcept": "c"
+		"stdexcept": "c",
+		"signal.h": "c"
 	}
 }

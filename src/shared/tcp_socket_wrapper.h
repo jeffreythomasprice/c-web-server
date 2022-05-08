@@ -12,7 +12,7 @@ extern "C" {
 /**
  * s is a socket handle that came from accept
  */
-typedef void (*tcp_socket_wrapper_callback)(void *data, int s);
+typedef void (*tcp_socket_wrapper_callback)(void *data, char *address, uint16_t port, int socket);
 
 typedef struct {
 	tcp_socket_wrapper_callback callback;
