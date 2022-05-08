@@ -111,11 +111,12 @@ void *tcp_socket_wrapper_thread(void *data) {
 
 		// accept new incoming connection
 		union {
-			struct sockaddr_in in4;
-			struct sockaddr_in6 in6;
+			struct sockaddr addr;
+			struct sockaddr_in addr4;
+			struct sockaddr_in6 addr6;
 		} request_address;
 		socklen_t request_address_len = sizeof(request_address);
-		int accepted_socket = accept(sock_wrap->socket, (struct sockaddr *)&request_address, &request_address_len);
+		int accepted_socket = accept(sock_wrap->socket, &request_address.addr, &request_address_len);
 
 		// some basic error checking
 		if (accepted_socket == -1) {
@@ -147,23 +148,33 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 
 	string_init(&sock_wrap->address);
 
-	/*
-	TODO JEFF comprehensive improvements to address parsing:
-	- detect whether the string is ipv6 or ipv4
-	- if null, detect whether we're on an ipv6 capable system and bind to ipv6
-	- handle the any address for ipv6 "::"
-	*/
-	struct sockaddr_in addr;
-	addr.sin_family = AF_INET;
-	if (!address || !strcmp(address, "0.0.0.0")) {
-		addr.sin_addr.s_addr = INADDR_ANY;
-	} else {
-		log_error("TODO implement addr parsing\n");
-		result = 1;
-		goto DONE;
+	// figure out what address has been requested
+	union {
+		struct sockaddr addr;
+		struct sockaddr_in addr4;
+		struct sockaddr_in6 addr6;
+	} addr;
+	socklen_t addr_len;
+	if (!address) {
+		address = "::";
 	}
-	addr.sin_port = htons(port);
+	if (inet_pton(AF_INET, address, &addr.addr4.sin_addr) <= 0) {
+		if (inet_pton(AF_INET6, address, &addr.addr6.sin6_addr) <= 0) {
+			log_error("input address doesn't look like a valid IPv4 or IPv6 address: %s\n", address);
+			result = 1;
+			goto DONE;
+		} else {
+			addr.addr.sa_family = AF_INET6;
+			addr.addr6.sin6_port = htons(port);
+			addr_len = sizeof(struct sockaddr_in6);
+		}
+	} else {
+		addr.addr.sa_family = AF_INET;
+		addr.addr4.sin_port = htons(port);
+		addr_len = sizeof(struct sockaddr_in);
+	}
 
+	// get a human-readable form of that bind address and port
 	if (get_sockaddr_info_str((struct sockaddr *)&addr, &sock_wrap->address, &sock_wrap->port)) {
 		log_error("failed to parse bound address and port for socket\n");
 		result = 1;
@@ -179,7 +190,7 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 	sock_wrap->callback = callback;
 	sock_wrap->callback_data = callback_data;
 
-	sock_wrap->socket = socket(AF_INET, SOCK_STREAM, 0);
+	sock_wrap->socket = socket(addr.addr.sa_family, SOCK_STREAM, 0);
 	if (sock_wrap->socket == -1) {
 		log_error("tcp_socket_wrapper_init failed, error creating socket, %s\n", strerror(errno));
 		result = 1;
@@ -191,7 +202,7 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 		result = 1;
 		goto DONE;
 	}
-	if (bind(sock_wrap->socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+	if (bind(sock_wrap->socket, &addr.addr, addr_len) < 0) {
 		log_error("tcp_socket_wrapper_init failed, failed to bind socket to port %i, %s\n", port, strerror(errno));
 		result = 1;
 		goto DONE;

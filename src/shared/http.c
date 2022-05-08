@@ -527,20 +527,6 @@ stream *http_response_get_body(http_response *response) {
 }
 
 int http_response_write(http_response *response, stream *stream) {
-	string_clear(&response->scratch);
-	string_append_cstrf(&response->scratch, "serializing response %i %s\n", response->status_code,
-						string_get_cstr(&response->reason_phrase));
-	http_headers_to_string(&response->headers, &response->scratch, "    ");
-	string_append_cstrf(&response->scratch, "    body: %zu bytes\n", buffer_get_length(&response->body_buffer));
-	log_trace("%s\n", string_get_cstr(&response->scratch));
-
-	// status line
-	if (stream_write_cstrf(stream, &response->scratch, "HTTP/1.1 %i %s\r\n", response->status_code,
-						   string_get_cstr(&response->reason_phrase)) < 0) {
-		log_error("error writing status line: %s\n", string_get_cstr(&response->scratch));
-		return 1;
-	}
-
 	// fix the content length header first
 	// this is true for even empty bodies, as without a Content-Length of 0 the client may not properly handle the response
 	// it's possible that a more careful reading of the RFC would make this obvious, but I see Content-Length as optional
@@ -566,6 +552,20 @@ int http_response_write(http_response *response, stream *stream) {
 	// if we ended up clearing the header add the correct value back
 	if (http_header_get_num_values(content_length_header) == 0) {
 		string_set_cstrf(http_header_append_value(content_length_header), "%zu", buffer_get_length(&response->body_buffer));
+	}
+
+	string_clear(&response->scratch);
+	string_append_cstrf(&response->scratch, "serializing response %i %s\n", response->status_code,
+						string_get_cstr(&response->reason_phrase));
+	http_headers_to_string(&response->headers, &response->scratch, "    ");
+	string_append_cstrf(&response->scratch, "    body: %zu bytes\n", buffer_get_length(&response->body_buffer));
+	log_trace("%s\n", string_get_cstr(&response->scratch));
+
+	// status line
+	if (stream_write_cstrf(stream, &response->scratch, "HTTP/1.1 %i %s\r\n", response->status_code,
+						   string_get_cstr(&response->reason_phrase)) < 0) {
+		log_error("error writing status line: %s\n", string_get_cstr(&response->scratch));
+		return 1;
 	}
 
 	// headers
@@ -752,7 +752,8 @@ int http_server_init(http_server *server, http_server_func callback, void *callb
 		return 1;
 	}
 
-	// TODO JEFF log addr at trace level
+	log_debug("http server started at %s:%i\n", string_get_cstr(tcp_socket_wrapper_get_address(&server->socket)),
+			  tcp_socket_wrapper_get_port(&server->socket));
 	return 0;
 }
 

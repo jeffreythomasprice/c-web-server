@@ -42,6 +42,16 @@ void get_sockaddr_info_6(uint8_t actual_addr[16], uint16_t actual_port, char *ex
 	string_dealloc(&addr);
 }
 
+void hostname_and_address() {
+	string hostname, address;
+	string_init(&hostname);
+	string_init(&address);
+	assert(get_hostname_str(&hostname) == 0);
+	assert(get_address_for_hostname_str(&hostname, &address) == 0);
+	string_dealloc(&hostname);
+	string_dealloc(&address);
+}
+
 void socket_accept(void *data, string *address, uint16_t port, int socket) {
 	assert(*((int *)data) == 42);
 
@@ -219,23 +229,13 @@ int main() {
 	static uint8_t example_ipv6_3[16] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
 	get_sockaddr_info_6(example_ipv6_3, htons(0x7890), "::1", 0x7890);
 
-	string hostname, address;
-	string_init(&hostname);
-	string_init(&address);
-	assert(get_hostname_str(&hostname) == 0);
-	assert(get_address_for_hostname_str(&hostname, &address) == 0);
+	hostname_and_address();
 
 	do_socket_test(NULL, 8000);
 	do_socket_test("0.0.0.0", 8000);
-	// TODO JEFF tests for address parsing
-	// do_socket_test("127.0.0.1", 8000);
-	// do_socket_test(string_get_cstr(&hostname), 8000);
-	// do_socket_test(string_get_cstr(&address), 8000);
-	// do_socket_test("::", 8000);
+	do_socket_test("127.0.0.1", 8000);
+	do_socket_test("::", 8000);
 	// do_socket_test("::1", 8000);
-
-	string_dealloc(&hostname);
-	string_dealloc(&address);
 
 	return 0;
 }
