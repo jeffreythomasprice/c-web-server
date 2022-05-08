@@ -540,29 +540,30 @@ int http_response_write(http_response *response, stream *stream) {
 	}
 
 	// fix the content length header first
-	if (buffer_get_length(&response->body_buffer) > 0) {
-		http_header *content_length_header = http_headers_get_cstr(&response->headers, "Content-Length", 1);
-		// check to see if the content length header is already set to the correct value
-		// check number of values, anything but exactly one value is obviously not correct
-		if (http_header_get_num_values(content_length_header) != 1) {
-			http_header_clear(content_length_header);
-		} else {
-			// get the actual value
-			size_t content_length_header_value;
-			if (sscanf(string_get_cstr(http_header_get_value(content_length_header, 0)), "%zu", &content_length_header_value) == 1) {
-				// it's an intenger, is it the right value already?
-				if (content_length_header_value != buffer_get_length(&response->body_buffer)) {
-					http_header_clear(content_length_header);
-				}
-			} else {
-				// not the right value
+	// this is true for even empty bodies, as without a Content-Length of 0 the client may not properly handle the response
+	// it's possible that a more careful reading of the RFC would make this obvious, but I see Content-Length as optional
+	// add it anyway to make clients happy
+	http_header *content_length_header = http_headers_get_cstr(&response->headers, "Content-Length", 1);
+	// check to see if the content length header is already set to the correct value
+	// check number of values, anything but exactly one value is obviously not correct
+	if (http_header_get_num_values(content_length_header) != 1) {
+		http_header_clear(content_length_header);
+	} else {
+		// get the actual value
+		size_t content_length_header_value;
+		if (sscanf(string_get_cstr(http_header_get_value(content_length_header, 0)), "%zu", &content_length_header_value) == 1) {
+			// it's an intenger, is it the right value already?
+			if (content_length_header_value != buffer_get_length(&response->body_buffer)) {
 				http_header_clear(content_length_header);
 			}
+		} else {
+			// not the right value
+			http_header_clear(content_length_header);
 		}
-		// if we ended up clearing the header add the correct value back
-		if (http_header_get_num_values(content_length_header) == 0) {
-			string_set_cstrf(http_header_append_value(content_length_header), "%zu", buffer_get_length(&response->body_buffer));
-		}
+	}
+	// if we ended up clearing the header add the correct value back
+	if (http_header_get_num_values(content_length_header) == 0) {
+		string_set_cstrf(http_header_append_value(content_length_header), "%zu", buffer_get_length(&response->body_buffer));
 	}
 
 	// headers
@@ -619,11 +620,6 @@ typedef struct {
 
 // private
 void http_server_finalize_task(http_server_task_data *data) {
-	/*
-	TODO JEFF not closing correctly, check with curl
-	curl gives responses like:
-	no chunk, no close, no size. Assume close to signal end
-	*/
 	if (http_response_write(&data->response, &data->socket_stream)) {
 		log_error("failed to write HTTP response to the socket stream\n");
 	}

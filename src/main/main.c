@@ -35,6 +35,7 @@ void signal_handler(int signum) {
 
 int handle_request(void *data, http_request *request, http_response *response) {
 	// TODO some real HTTP request-response stuff
+	log_trace("TODO JEFF implement some real example\n");
 	return 0;
 }
 

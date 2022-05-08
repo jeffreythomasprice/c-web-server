@@ -1,3 +1,11 @@
+/*
+An implementation of an HTTP web server.
+
+References:
+https://www.ietf.org/rfc/rfc2616.txt
+https://www.ietf.org/rfc/rfc7230.txt
+*/
+
 #ifndef http_h
 #define http_h
 
