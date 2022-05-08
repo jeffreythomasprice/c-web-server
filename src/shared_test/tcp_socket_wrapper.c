@@ -16,7 +16,9 @@ The data sent is prefixed with a 2-byte length.
 #include <string.h>
 #include <unistd.h>
 
-void socket_accept(int s) {
+void socket_accept(void *data, int s) {
+	assert(*((int *)data) == 42);
+
 	// read the length header
 	uint16_t len;
 	int result = read(s, &len, 2);
@@ -173,15 +175,17 @@ int send_test_data() {
 int main() {
 	srand(time(NULL));
 
+	int data = 42;
+
 	tcp_socket_wrapper sock_wrap;
 	// TODO version of this test that tests binding only to localhost
-	if (tcp_socket_wrapper_init(&sock_wrap, NULL, 8000, socket_accept)) {
+	if (tcp_socket_wrapper_init(&sock_wrap, NULL, 8000, socket_accept, &data)) {
 		return 1;
 	}
 
 	assert(send_test_data() == 0);
 
-	if (tcp_socket_wrapper_destroy(&sock_wrap)) {
+	if (tcp_socket_wrapper_dealloc(&sock_wrap)) {
 		return 1;
 	}
 	return 0;

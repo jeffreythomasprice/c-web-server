@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "http.h"
@@ -371,6 +372,14 @@ void http_response_dealloc(http_response *response) {
 	string_dealloc(&response->scratch);
 }
 
+void http_response_clear(http_response *response) {
+	string_clear(&response->scratch);
+	http_response_set_status_code(response, 200);
+	http_headers_clear(&response->headers);
+	buffer_clear(&response->body_buffer);
+	stream_set_position(&response->body_stream, 0);
+}
+
 int http_response_get_status_code(http_response *response) {
 	return response->status_code;
 }
@@ -596,4 +605,134 @@ int http_response_write(http_response *response, stream *stream) {
 
 	// success
 	return 0;
+}
+
+// private
+typedef struct {
+	http_server *server;
+	string scratch;
+	http_request request;
+	http_response response;
+	int socket;
+	stream socket_stream;
+} http_server_task_data;
+
+// private
+void http_server_finalize_task(http_server_task_data *data) {
+	/*
+	TODO JEFF not closing correctly, check with curl
+	curl gives responses like:
+	no chunk, no close, no size. Assume close to signal end
+	*/
+	if (http_response_write(&data->response, &data->socket_stream)) {
+		log_error("failed to write HTTP response to the socket stream\n");
+	}
+	// close out future reads and writes
+	// if we're writing a timeout response this will cause future writes to the socket to fail in the handler function ever finishes
+	shutdown(data->socket, SHUT_RDWR);
+	if (stream_dealloc(&data->socket_stream, &data->scratch)) {
+		log_error("failed to close HTTP request socket stream: %s\n", string_get_cstr(&data->scratch));
+	}
+
+	// TODO JEFF put task back on pool
+	string_dealloc(&data->scratch);
+	http_request_dealloc(&data->request);
+	http_response_dealloc(&data->response);
+	free(data);
+}
+
+// private
+int http_server_task(int thread_id, void *data) {
+	http_server_task_data *task_data = data;
+
+	if (task_data->server->callback(task_data->server->callback_data, &task_data->request, &task_data->response)) {
+		// something bad happened in the handler, just return a generic error
+		log_debug("HTTP handler failed\n");
+		http_response_clear(&task_data->response);
+		http_response_set_status_code(&task_data->response, 500);
+	}
+
+	http_server_finalize_task(task_data);
+	return 0;
+}
+
+// private
+void http_server_socket_accept(void *data, int s) {
+	http_server *server = data;
+
+	// TODO JEFF grab tasks off a pool
+	http_server_task_data *task_data = malloc(sizeof(http_server_task_data));
+	task_data->server = server;
+	string_init(&task_data->scratch);
+	http_request_init(&task_data->request);
+	http_response_init(&task_data->response);
+	task_data->socket = s;
+	stream_init_file_descriptor(&task_data->socket_stream, s, 1);
+	int enqueue_error = worker_thread_pool_enqueue(&server->thread_pool, http_server_task, task_data, NULL, server->timeout);
+	int should_finalize_task = 0;
+	switch (enqueue_error) {
+	case 0:
+		// nothing to do, this is the success case
+		// we can assume the worker thread will clean up everything
+		return;
+	case WORKER_THREAD_POOL_ERROR_QUEUE_FULL:
+		// we didn't enqueue, so we can't rely on them to free memory
+		log_error("failed to execute incoming HTTP request, queue is full\n");
+		http_response_clear(&task_data->response);
+		http_response_set_status_code(&task_data->response, 503);
+		should_finalize_task = 1;
+		break;
+	case WORKER_THREAD_POOL_ERROR_TIMEOUT:
+		// we did enqueue, it's just taking a long time
+		log_error("timed out waiting on HTTP response handler for request\n");
+		http_response_clear(&task_data->response);
+		http_response_set_status_code(&task_data->response, 503);
+		should_finalize_task = 1;
+		break;
+	default:
+		// any other error we assume we didn't end up in the queue so clean up
+		log_error("failed to execute incoming request, %i\n", enqueue_error);
+		http_response_clear(&task_data->response);
+		http_response_set_status_code(&task_data->response, 500);
+		should_finalize_task = 1;
+		break;
+	}
+	if (should_finalize_task) {
+		http_server_finalize_task(task_data);
+	}
+}
+
+int http_server_init(http_server *server, http_server_func callback, void *callback_data, char *address, uint16_t port, int num_threads,
+					 int queue_size, uint64_t timeout) {
+	server->callback = callback;
+	server->timeout = timeout;
+
+	if (tcp_socket_wrapper_init(&server->socket, address, port, http_server_socket_accept, server)) {
+		log_error("failed to open the http server socket\n");
+		return 1;
+	}
+
+	if (worker_thread_pool_init(&server->thread_pool, num_threads, queue_size)) {
+		log_error("failed to initialize the http server thread pool\n");
+		if (tcp_socket_wrapper_dealloc(&server->socket)) {
+			log_error("failed to close the http server socket after a previous failure to initialize the http server\n");
+		}
+		return 1;
+	}
+
+	// TODO JEFF log addr at trace level
+	return 0;
+}
+
+int http_server_dealloc(http_server *server) {
+	int result = 0;
+	if (tcp_socket_wrapper_dealloc(&server->socket)) {
+		log_error("failed to close the http server socket\n");
+		result = 1;
+	}
+	if (worker_thread_pool_dealloc(&server->thread_pool)) {
+		log_error("failed to close the http server thread pool");
+		result = 1;
+	}
+	return result;
 }

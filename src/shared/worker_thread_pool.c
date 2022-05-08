@@ -102,13 +102,13 @@ int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue
 
 	if (pthread_mutex_init(&pool->tasks_mutex, NULL)) {
 		log_error("worker_thread_pool_init failed, pthread_mutex_init failed on task mutex\n");
-		worker_thread_pool_destroy(pool);
+		worker_thread_pool_dealloc(pool);
 		return WORKER_THREAD_POOL_ERROR;
 	}
 	pool->tasks_mutex_is_init = 1;
 	if (sem_init(&pool->tasks_semaphore, 0, 0)) {
 		log_error("worker_thread_pool_init failed, sem_init failed on task semaphore %i\n", errno);
-		worker_thread_pool_destroy(pool);
+		worker_thread_pool_dealloc(pool);
 		return WORKER_THREAD_POOL_ERROR;
 	}
 	pool->tasks_semaphore_is_init = 1;
@@ -122,7 +122,7 @@ int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue
 		context->id = i;
 		if (pthread_create(&context->thread, NULL, worker_thread_pool_pthread_callback, context)) {
 			log_error("worker_thread_pool_init failed, pthread_create failed on thread %i\n", i);
-			worker_thread_pool_destroy(pool);
+			worker_thread_pool_dealloc(pool);
 			return WORKER_THREAD_POOL_ERROR;
 		}
 		context->thread_is_init = 1;
@@ -131,8 +131,8 @@ int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue
 	return WORKER_THREAD_POOL_SUCCESS;
 }
 
-int worker_thread_pool_destroy(worker_thread_pool *pool) {
-	log_trace("worker_thread_pool_destroy start\n");
+int worker_thread_pool_dealloc(worker_thread_pool *pool) {
+	log_trace("worker_thread_pool_dealloc start\n");
 	// all threads should be exiting
 	if (pool->threads) {
 		for (int i = 0; i < pool->num_threads; i++) {
@@ -146,7 +146,7 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 		for (int i = 0; i < pool->num_threads; i++) {
 			void *result;
 			if (pool->threads[i].thread_is_init && pthread_join(pool->threads[i].thread, &result)) {
-				log_error("worker_thread_pool_destroy failed, pthread_join failed during shutdown on thread %i\n", i);
+				log_error("worker_thread_pool_dealloc failed, pthread_join failed during shutdown on thread %i\n", i);
 			}
 			pool->threads[i].thread_is_init = 0;
 		}
@@ -154,18 +154,18 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 		pool->threads = NULL;
 	}
 	if (pool->tasks_semaphore_is_init && sem_destroy(&pool->tasks_semaphore)) {
-		log_error("worker_thread_pool_destroy failed, sem_destroy failed on task semaphore\n");
+		log_error("worker_thread_pool_dealloc failed, sem_destroy failed on task semaphore\n");
 	}
 	pool->tasks_semaphore_is_init = 0;
 	if (pool->tasks_mutex_is_init && pthread_mutex_destroy(&pool->tasks_mutex)) {
-		log_error("worker_thread_pool_destroy failed, pthread_mutex_destroy failed on task mutex\n");
+		log_error("worker_thread_pool_dealloc failed, pthread_mutex_destroy failed on task mutex\n");
 	}
 	pool->tasks_mutex_is_init = 0;
 	for (worker_thread_pool_task *t = pool->task_pool_first; t;) {
 		worker_thread_pool_task *t2 = t;
 		t = t->next;
 		if (sem_destroy(&t2->semaphore)) {
-			log_error("worker_thread_pool_destroy failed, sem_destroy failed on specific task in pool semaphore\n");
+			log_error("worker_thread_pool_dealloc failed, sem_destroy failed on specific task in pool semaphore\n");
 		}
 		free(t2);
 	}
@@ -175,14 +175,14 @@ int worker_thread_pool_destroy(worker_thread_pool *pool) {
 		worker_thread_pool_task *t2 = t;
 		t = t->next;
 		if (sem_destroy(&t2->semaphore)) {
-			log_error("worker_thread_pool_destroy failed, sem_destroy failed on specific task in pending semaphore\n");
+			log_error("worker_thread_pool_dealloc failed, sem_destroy failed on specific task in pending semaphore\n");
 		}
 		free(t2);
 	}
 	pool->task_pending_first = NULL;
 	pool->task_pending_last = NULL;
 	pool->task_pending_len = 0;
-	log_trace("worker_thread_pool_destroy success\n");
+	log_trace("worker_thread_pool_dealloc success\n");
 	return WORKER_THREAD_POOL_SUCCESS;
 }
 

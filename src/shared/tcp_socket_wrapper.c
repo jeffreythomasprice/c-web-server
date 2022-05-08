@@ -62,14 +62,15 @@ void *tcp_socket_wrapper_thread(void *data) {
 		inet_ntop(AF_INET, &request_address.sin_addr, request_address_str, INET_ADDRSTRLEN);
 		log_trace("incoming request from %s:%i\n", request_address_str, ntohs(request_address.sin_port));
 
-		sock_wrap->callback(accepted_socket);
+		sock_wrap->callback(sock_wrap->callback_data, accepted_socket);
 	}
 
 	log_trace("tcp_socket_wrapper_thread done\n");
 	return NULL;
 }
 
-int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback) {
+int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback,
+							void *callback_data) {
 	memset(sock_wrap, 0, sizeof(tcp_socket_wrapper));
 
 	struct sockaddr_in addr;
@@ -89,6 +90,7 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 		return 1;
 	}
 	sock_wrap->callback = callback;
+	sock_wrap->callback_data = callback_data;
 
 	sock_wrap->socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock_wrap->socket == -1) {
@@ -129,17 +131,17 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 	return 0;
 }
 
-int tcp_socket_wrapper_destroy(tcp_socket_wrapper *sock_wrap) {
-	log_trace("tcp_socket_wrapper_destroy start\n");
+int tcp_socket_wrapper_dealloc(tcp_socket_wrapper *sock_wrap) {
+	log_trace("tcp_socket_wrapper_dealloc start\n");
 	sock_wrap->running = 0;
 	void *result;
 	if (sock_wrap->thread_is_init && pthread_join(sock_wrap->thread, &result)) {
-		log_error("tcp_socket_wrapper_destroy failed, pthread_join failed during shutdown\n");
+		log_error("tcp_socket_wrapper_dealloc failed, pthread_join failed during shutdown\n");
 	}
 	if (sock_wrap->socket) {
 		close(sock_wrap->socket);
 		sock_wrap->socket = 0;
 	}
-	log_trace("tcp_socket_wrapper_destroy success\n");
+	log_trace("tcp_socket_wrapper_dealloc success\n");
 	return 0;
 }

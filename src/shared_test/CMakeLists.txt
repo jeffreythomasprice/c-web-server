@@ -9,7 +9,7 @@ target_link_libraries(test_buffer shared)
 add_test(NAME test_buffer COMMAND test_buffer)
 
 add_executable(test_http http.c)
-target_link_libraries(test_http shared)
+target_link_libraries(test_http shared pthread)
 add_test(NAME test_http COMMAND test_http)
 
 add_executable(test_stream stream.c)

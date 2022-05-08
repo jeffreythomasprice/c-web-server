@@ -8,6 +8,7 @@ curl example.com -X POST  -H "Content-Type: text/plain" --data-binary @input --t
 #include <string.h>
 
 #include "../shared/http.h"
+#include "../shared/log.h"
 
 void header() {
 	http_header header;

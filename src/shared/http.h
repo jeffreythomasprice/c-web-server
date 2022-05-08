@@ -3,6 +3,8 @@
 
 #include "stream.h"
 #include "string.h"
+#include "tcp_socket_wrapper.h"
+#include "worker_thread_pool.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +42,16 @@ typedef struct {
 	stream body_stream;
 } http_response;
 
+typedef int (*http_server_func)(void *data, http_request *request, http_response *response);
+
+typedef struct {
+	http_server_func callback;
+	void *callback_data;
+	uint64_t timeout;
+	tcp_socket_wrapper socket;
+	worker_thread_pool thread_pool;
+} http_server;
+
 void http_header_init(http_header *header);
 void http_header_dealloc(http_header *header);
 void http_header_clear(http_header *header);
@@ -70,6 +82,7 @@ int http_request_parse(http_request *request, stream *stream);
 
 void http_response_init(http_response *response);
 void http_response_dealloc(http_response *response);
+void http_response_clear(http_response *response);
 int http_response_get_status_code(http_response *response);
 void http_response_set_status_code(http_response *response, int status_code);
 string *http_response_get_reason_phrase(http_response *response);
@@ -81,6 +94,20 @@ stream *http_response_get_body(http_response *response);
  * @returns 0 when successful, non-0 when any error occurs writing to the stream
  */
 int http_response_write(http_response *response, stream *stream);
+
+/**
+ * Maintains a socket that it accepts incoming HTTP requests on. It invokes the given callback in a thread pool, and then responds with the
+ * filled in response. Task failures or timeouts generate default responses.
+ * @param address passed to tcp_socket_wrapper_init
+ * @param port passed to tcp_socket_wrapper_init
+ * @param num_threads passed to worker_thread_pool_init
+ * @param queue_size passed to worker_thread_pool_init
+ * @param timeout the time wait on the server callback to return before sending back an error response, in nanoseconds
+ * @return 0 when successful, non-0 when an error occurs or on bad arguments
+ */
+int http_server_init(http_server *server, http_server_func callback, void *callback_data, char *address, uint16_t port, int num_threads,
+					 int queue_size, uint64_t timeout);
+int http_server_dealloc(http_server *server);
 
 #ifdef __cplusplus
 }

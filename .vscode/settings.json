@@ -26,6 +26,10 @@
 		"ostream": "cpp",
 		"streambuf": "cpp",
 		"tuple": "c",
-		"varargs.h": "c"
+		"varargs.h": "c",
+		"system_error": "c",
+		"limits": "c",
+		"new": "c",
+		"stdexcept": "c"
 	}
 }

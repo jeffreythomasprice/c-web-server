@@ -79,7 +79,7 @@ Stops all worker threads and waits until all are completed. Frees all resources.
 
 Returns WORKER_THREAD_POOL_SUCCESS on success, WORKER_THREAD_POOL_ERROR on failure.
 */
-int worker_thread_pool_destroy(worker_thread_pool *pool);
+int worker_thread_pool_dealloc(worker_thread_pool *pool);
 
 /*
 Enqueues a new job in the queue and blocks until it is complete.

@@ -12,18 +12,25 @@ extern "C" {
 /**
  * s is a socket handle that came from accept
  */
-typedef void (*tcp_socket_wrapper_callback)(int s);
+typedef void (*tcp_socket_wrapper_callback)(void *data, int s);
 
 typedef struct {
 	tcp_socket_wrapper_callback callback;
+	void *callback_data;
 	int socket;
 	int running;
 	int thread_is_init;
 	pthread_t thread;
 } tcp_socket_wrapper;
 
-int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback);
-int tcp_socket_wrapper_destroy(tcp_socket_wrapper *sock_wrap);
+/**
+ * @param address the address to bind to which may be NULL or "0.0.0.0" to indicate binding to any address
+ * @param port the port to bind to
+ * @param callback the function to call on incoming TCP connections
+ */
+int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16_t port, tcp_socket_wrapper_callback callback,
+							void *callback_data);
+int tcp_socket_wrapper_dealloc(tcp_socket_wrapper *sock_wrap);
 
 #ifdef __cplusplus
 }

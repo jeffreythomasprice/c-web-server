@@ -175,6 +175,6 @@ int main(int argc, char **argv) {
 	fflush(stdout);
 
 	free(expected);
-	worker_thread_pool_destroy(&pool);
+	worker_thread_pool_dealloc(&pool);
 	return 0;
 }
