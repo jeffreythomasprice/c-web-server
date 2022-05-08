@@ -59,7 +59,9 @@ size_t stream_buffer_get_position(stream *stream) {
 
 size_t stream_buffer_set_position(stream *stream, size_t pos) {
 	size_t len = buffer_get_length(stream->buffer.buffer);
-	if (pos >= len) {
+	if (len == 0) {
+		pos = 0;
+	} else if (pos >= len) {
 		pos = pos = len - 1;
 	}
 	stream->buffer.position = pos;

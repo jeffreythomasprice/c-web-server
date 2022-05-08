@@ -366,17 +366,12 @@ void http_response_init(http_response *response) {
 }
 
 void http_response_dealloc(http_response *response) {
-	log_trace("TODO JEFF 1\n");
 	http_headers_dealloc(&response->headers);
-	log_trace("TODO JEFF 2\n");
 	buffer_dealloc(&response->body_buffer);
-	log_trace("TODO JEFF 3\n");
 	if (stream_dealloc(&response->body_stream, &response->scratch)) {
 		log_error("error deallocating response body stream: %s\n", &response->scratch);
 	}
-	log_trace("TODO JEFF 4\n");
 	string_dealloc(&response->scratch);
-	log_trace("TODO JEFF 5\n");
 }
 
 void http_response_clear(http_response *response) {

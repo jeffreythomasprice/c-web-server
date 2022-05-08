@@ -312,7 +312,7 @@ void response_no_headers_no_body() {
 	http_response response;
 	http_response_init(&response);
 	http_response_set_status_code(&response, 200);
-	assert_response_writes_to(&response, "HTTP/1.1 200 OK\r\n\r\n");
+	assert_response_writes_to(&response, "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n");
 	http_response_dealloc(&response);
 }
 
@@ -325,7 +325,7 @@ void response_headers_no_body() {
 	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "asdf");
 	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "widget");
 	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "bang");
-	assert_response_writes_to(&response, "HTTP/1.1 400 Bad Request\r\nfoo: bar,asdf,widget,bang\r\nbaz: 42\r\n\r\n");
+	assert_response_writes_to(&response, "HTTP/1.1 400 Bad Request\r\nfoo: bar,asdf,widget,bang\r\nbaz: 42\r\nContent-Length: 0\r\n\r\n");
 	http_response_dealloc(&response);
 }
 

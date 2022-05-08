@@ -203,6 +203,15 @@ void write_buffer() {
 	assert(stream_write_buffer(&dst, &src_buf, NULL) == 13);
 	assert(memcmp(dst_buf.data, "Hello, World!", 13) == 0);
 
+	// clear the buffer
+	// this should catch the case where changing stream position when buffer length is 0, was a bug where this caused it to set position to
+	// -1 breaking frees
+	buffer_clear(&dst_buf);
+	stream_set_position(&dst, 0);
+
+	assert(stream_write_buffer(&dst, &src_buf, NULL) == 13);
+	assert(memcmp(dst_buf.data, "Hello, World!", 13) == 0);
+
 	buffer_dealloc(&src_buf);
 	stream_dealloc(&dst, NULL);
 }
