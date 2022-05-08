@@ -31,6 +31,7 @@
 		"limits": "c",
 		"new": "c",
 		"stdexcept": "c",
-		"signal.h": "c"
+		"signal.h": "c",
+		"inet.h": "c"
 	}
 }

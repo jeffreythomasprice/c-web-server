@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <errno.h>
-#include <netinet/in.h>
+#include <limits.h>
+#include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -12,9 +13,80 @@
 
 #include "../shared/log.h"
 
+// private
+void get_inaddr_4_str(struct in_addr *addr, string *result) {
+	char temp[INET_ADDRSTRLEN + 1];
+	inet_ntop(AF_INET, addr, temp, sizeof(temp));
+	string_set_cstr(result, temp);
+}
+
+// private
+void get_inaddr_6_str(struct in6_addr *addr, string *result) {
+	char temp[INET6_ADDRSTRLEN + 1];
+	inet_ntop(AF_INET6, addr, temp, sizeof(temp));
+	string_set_cstr(result, temp);
+}
+
+int get_sockaddr_info_str(struct sockaddr *addr, string *address, uint16_t *port) {
+	int result = 0;
+	switch (((struct sockaddr_in *)addr)->sin_family) {
+	case AF_INET:
+		if (address) {
+			get_inaddr_4_str(&((struct sockaddr_in *)addr)->sin_addr, address);
+		}
+		if (port) {
+			*port = ntohs(((struct sockaddr_in *)addr)->sin_port);
+		}
+		break;
+	case AF_INET6:
+		if (address) {
+			get_inaddr_6_str(&((struct sockaddr_in6 *)addr)->sin6_addr, address);
+		}
+		if (port) {
+			*port = ntohs(((struct sockaddr_in6 *)addr)->sin6_port);
+		}
+		break;
+	default:
+		result = 1;
+		break;
+	}
+	return result;
+}
+
+int get_hostname_str(string *hostname) {
+	char tmp[HOST_NAME_MAX];
+	if (gethostname(tmp, HOST_NAME_MAX)) {
+		return 1;
+	}
+	string_set_cstr(hostname, tmp);
+	return 0;
+}
+
+int get_address_for_hostname_str(string *hostname, string *address) {
+	struct hostent *he = gethostbyname(string_get_cstr(hostname));
+	int result = 0;
+	switch (he->h_addrtype) {
+	case AF_INET:
+		get_inaddr_4_str((struct in_addr *)he->h_addr_list[0], address);
+		break;
+	case AF_INET6:
+		get_inaddr_6_str((struct in6_addr *)he->h_addr_list[0], address);
+		break;
+	default:
+		result = 1;
+		break;
+	}
+	return result;
+}
+
+// private
 void *tcp_socket_wrapper_thread(void *data) {
 	log_trace("tcp_socket_wrapper_thread start\n");
 	tcp_socket_wrapper *sock_wrap = data;
+
+	string address;
+	string_init(&address);
+	uint16_t port;
 
 	while (sock_wrap->running) {
 		// a file descriptor set that contains just the one socket we're waiting on new connections for
@@ -38,8 +110,11 @@ void *tcp_socket_wrapper_thread(void *data) {
 		// no errors, we have an incoming connection
 
 		// accept new incoming connection
-		struct sockaddr_in request_address;
-		socklen_t request_address_len = sizeof(struct sockaddr_in);
+		union {
+			struct sockaddr_in in4;
+			struct sockaddr_in6 in6;
+		} request_address;
+		socklen_t request_address_len = sizeof(request_address);
 		int accepted_socket = accept(sock_wrap->socket, (struct sockaddr *)&request_address, &request_address_len);
 
 		// some basic error checking
@@ -47,24 +122,18 @@ void *tcp_socket_wrapper_thread(void *data) {
 			log_error("accepting incoming connection failed with %i\n", errno);
 			continue;
 		}
-		if (request_address.sin_family == AF_INET6) {
-			log_error("IPv6 unsupported\n");
+
+		if (get_sockaddr_info_str((struct sockaddr *)&request_address, &address, &port)) {
+			log_error("error parsing address for incoming connection\n");
 			close(accepted_socket);
 			continue;
 		}
-		if (request_address.sin_family != AF_INET) {
-			log_error("unrecognized address family %i\n", request_address.sin_family);
-			close(accepted_socket);
-			continue;
-		}
+		log_trace("incoming request from %s:%i\n", string_get_cstr(&address), port);
 
-		char request_address_str[(INET_ADDRSTRLEN > INET6_ADDRSTRLEN ? INET_ADDRSTRLEN : INET6_ADDRSTRLEN) + 1];
-		inet_ntop(request_address.sin_family, &request_address.sin_addr, request_address_str, sizeof(request_address_str));
-		uint16_t request_port = ntohs(request_address.sin_port);
-		log_trace("incoming request from %s:%i\n", request_address_str, request_port);
-
-		sock_wrap->callback(sock_wrap->callback_data, request_address_str, request_port, accepted_socket);
+		sock_wrap->callback(sock_wrap->callback_data, &address, port, accepted_socket);
 	}
+
+	string_dealloc(&address);
 
 	log_trace("tcp_socket_wrapper_thread done\n");
 	return NULL;
@@ -74,21 +143,38 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 							void *callback_data) {
 	memset(sock_wrap, 0, sizeof(tcp_socket_wrapper));
 
+	int result = 0;
+
+	string_init(&sock_wrap->address);
+
+	/*
+	TODO JEFF comprehensive improvements to address parsing:
+	- detect whether the string is ipv6 or ipv4
+	- if null, detect whether we're on an ipv6 capable system and bind to ipv6
+	- handle the any address for ipv6 "::"
+	*/
 	struct sockaddr_in addr;
 	addr.sin_family = AF_INET;
 	if (!address || !strcmp(address, "0.0.0.0")) {
-		log_trace("tcp_socket_wrapper_init *:%i\n", port);
 		addr.sin_addr.s_addr = INADDR_ANY;
 	} else {
-		log_trace("tcp_socket_wrapper_init %s:%i\n", address, port);
 		log_error("TODO implement addr parsing\n");
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	addr.sin_port = htons(port);
 
+	if (get_sockaddr_info_str((struct sockaddr *)&addr, &sock_wrap->address, &sock_wrap->port)) {
+		log_error("failed to parse bound address and port for socket\n");
+		result = 1;
+		goto DONE;
+	}
+	log_trace("tcp_socket_wrapper_init %s:%i\n", string_get_cstr(&sock_wrap->address), sock_wrap->port);
+
 	if (!callback) {
 		log_error("tcp_socket_wrapper_init failed, callback is required\n");
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	sock_wrap->callback = callback;
 	sock_wrap->callback_data = callback_data;
@@ -96,40 +182,45 @@ int tcp_socket_wrapper_init(tcp_socket_wrapper *sock_wrap, char *address, uint16
 	sock_wrap->socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (sock_wrap->socket == -1) {
 		log_error("tcp_socket_wrapper_init failed, error creating socket, %s\n", strerror(errno));
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	int option = 1;
 	if (setsockopt(sock_wrap->socket, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option))) {
 		log_error("tcp_socket_wrapper_init failed, failed to set socket options %s\n", strerror(errno));
-		close(sock_wrap->socket);
-		sock_wrap->socket = 0;
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	if (bind(sock_wrap->socket, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
 		log_error("tcp_socket_wrapper_init failed, failed to bind socket to port %i, %s\n", port, strerror(errno));
-		close(sock_wrap->socket);
-		sock_wrap->socket = 0;
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	// 2nd arg is number of connections that can be blocked waiting for the next accept
 	if (listen(sock_wrap->socket, 10) < 0) {
 		log_error("tcp_socket_wrapper_init failed, failed to listen on socket, %s\n", strerror(errno));
-		close(sock_wrap->socket);
-		sock_wrap->socket = 0;
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 
 	sock_wrap->running = 1;
 	if (pthread_create(&sock_wrap->thread, NULL, tcp_socket_wrapper_thread, sock_wrap)) {
 		log_error("tcp_socket_wrapper_init failed, failed to make thread\n");
-		close(sock_wrap->socket);
-		sock_wrap->socket = 0;
-		return 1;
+		result = 1;
+		goto DONE;
 	}
 	sock_wrap->thread_is_init = 1;
 
 	log_trace("tcp_socket_wrapper_init success\n");
-	return 0;
+DONE:
+	if (result) {
+		if (sock_wrap->socket) {
+			close(sock_wrap->socket);
+			sock_wrap->socket = 0;
+		}
+		string_dealloc(&sock_wrap->address);
+	}
+	return result;
 }
 
 int tcp_socket_wrapper_dealloc(tcp_socket_wrapper *sock_wrap) {
@@ -143,6 +234,15 @@ int tcp_socket_wrapper_dealloc(tcp_socket_wrapper *sock_wrap) {
 		close(sock_wrap->socket);
 		sock_wrap->socket = 0;
 	}
+	string_dealloc(&sock_wrap->address);
 	log_trace("tcp_socket_wrapper_dealloc success\n");
 	return 0;
+}
+
+string *tcp_socket_wrapper_get_address(tcp_socket_wrapper *sock_wrap) {
+	return &sock_wrap->address;
+}
+
+uint16_t tcp_socket_wrapper_get_port(tcp_socket_wrapper *sock_wrap) {
+	return sock_wrap->port;
 }

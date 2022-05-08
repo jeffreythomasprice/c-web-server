@@ -676,7 +676,7 @@ DONE:
 }
 
 // private
-void http_server_socket_accept(void *data, char *address, uint16_t port, int socket) {
+void http_server_socket_accept(void *data, string *address, uint16_t port, int socket) {
 	http_server *server = data;
 
 	// TODO JEFF grab tasks off a pool
@@ -689,7 +689,7 @@ void http_server_socket_accept(void *data, char *address, uint16_t port, int soc
 	http_response_init(&task_data->response);
 
 	// remember where this request came from
-	string_set_cstr(&task_data->request_address, address);
+	string_set_str(&task_data->request_address, address);
 	task_data->request_port = port;
 	log_trace("queuing incoming HTTP request from %s:%i\n", string_get_cstr(&task_data->request_address), task_data->request_port);
 

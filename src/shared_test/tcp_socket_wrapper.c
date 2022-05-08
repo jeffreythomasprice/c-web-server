@@ -11,12 +11,38 @@ The data sent is prefixed with a 2-byte length.
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-void socket_accept(void *data, char *address, uint16_t port, int socket) {
+void get_sockaddr_info_4(uint32_t actual_addr, uint16_t actual_port, char *expected_addr, uint16_t expected_port) {
+	struct sockaddr saddr;
+	((struct sockaddr_in *)&saddr)->sin_family = AF_INET;
+	((struct sockaddr_in *)&saddr)->sin_addr.s_addr = actual_addr;
+	((struct sockaddr_in *)&saddr)->sin_port = actual_port;
+	string addr;
+	string_init(&addr);
+	uint16_t port;
+	assert(get_sockaddr_info_str(&saddr, &addr, &port) == 0);
+	assert(string_compare_cstr(&addr, expected_addr, STRING_COMPARE_CASE_SENSITIVE) == 0);
+	assert(port == expected_port);
+	string_dealloc(&addr);
+}
+
+void get_sockaddr_info_6(uint8_t actual_addr[16], uint16_t actual_port, char *expected_addr, uint16_t expected_port) {
+	struct sockaddr saddr;
+	((struct sockaddr_in6 *)&saddr)->sin6_family = AF_INET6;
+	memcpy(&((struct sockaddr_in6 *)&saddr)->sin6_addr, actual_addr, 16);
+	((struct sockaddr_in6 *)&saddr)->sin6_port = actual_port;
+	string addr;
+	string_init(&addr);
+	uint16_t port;
+	assert(get_sockaddr_info_str(&saddr, &addr, &port) == 0);
+	assert(string_compare_cstr(&addr, expected_addr, STRING_COMPARE_CASE_SENSITIVE) == 0);
+	assert(port == expected_port);
+	string_dealloc(&addr);
+}
+
+void socket_accept(void *data, string *address, uint16_t port, int socket) {
 	assert(*((int *)data) == 42);
 
 	// read the length header
@@ -172,21 +198,44 @@ int send_test_data() {
 	return 0;
 }
 
+void do_socket_test(char *address, uint16_t port) {
+	int data = 42;
+	tcp_socket_wrapper sock_wrap;
+	assert(tcp_socket_wrapper_init(&sock_wrap, address, port, socket_accept, &data) == 0);
+	assert(send_test_data() == 0);
+	assert(tcp_socket_wrapper_dealloc(&sock_wrap) == 0);
+}
+
 int main() {
 	srand(time(NULL));
 
-	int data = 42;
+	get_sockaddr_info_4(htonl(0x01020304), htons(0x5678), "1.2.3.4", 0x5678);
+	get_sockaddr_info_4(htonl(0x00000000), htons(0x0000), "0.0.0.0", 0x0000);
+	get_sockaddr_info_4(htonl(0xfeffffff), htons(0x1234), "254.255.255.255", 0x1234);
+	static uint8_t example_ipv6_1[16] = {0x20, 0x01, 0x08, 0x88, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02};
+	get_sockaddr_info_6(example_ipv6_1, htons(0x7890), "2001:888:0:2::2", 0x7890);
+	static uint8_t example_ipv6_2[16] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+	get_sockaddr_info_6(example_ipv6_2, htons(0x7890), "::", 0x7890);
+	static uint8_t example_ipv6_3[16] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01};
+	get_sockaddr_info_6(example_ipv6_3, htons(0x7890), "::1", 0x7890);
 
-	tcp_socket_wrapper sock_wrap;
-	// TODO version of this test that tests binding only to localhost
-	if (tcp_socket_wrapper_init(&sock_wrap, NULL, 8000, socket_accept, &data)) {
-		return 1;
-	}
+	string hostname, address;
+	string_init(&hostname);
+	string_init(&address);
+	assert(get_hostname_str(&hostname) == 0);
+	assert(get_address_for_hostname_str(&hostname, &address) == 0);
 
-	assert(send_test_data() == 0);
+	do_socket_test(NULL, 8000);
+	do_socket_test("0.0.0.0", 8000);
+	// TODO JEFF tests for address parsing
+	// do_socket_test("127.0.0.1", 8000);
+	// do_socket_test(string_get_cstr(&hostname), 8000);
+	// do_socket_test(string_get_cstr(&address), 8000);
+	// do_socket_test("::", 8000);
+	// do_socket_test("::1", 8000);
 
-	if (tcp_socket_wrapper_dealloc(&sock_wrap)) {
-		return 1;
-	}
+	string_dealloc(&hostname);
+	string_dealloc(&address);
+
 	return 0;
 }
