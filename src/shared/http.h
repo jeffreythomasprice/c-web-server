@@ -31,6 +31,15 @@ typedef struct {
 	buffer body;
 } http_request;
 
+typedef struct {
+	string scratch;
+	int status_code;
+	string reason_phrase;
+	http_headers headers;
+	buffer body_buffer;
+	stream body_stream;
+} http_response;
+
 void http_header_init(http_header *header);
 void http_header_dealloc(http_header *header);
 void http_header_clear(http_header *header);
@@ -49,49 +58,29 @@ http_header *http_headers_get_cstr_len(http_headers *headers, char *name, size_t
 
 void http_request_init(http_request *request);
 void http_request_dealloc(http_request *request);
+string *http_request_get_method(http_request *request);
+string *http_request_get_uri(http_request *request);
+http_headers *http_request_get_headers(http_request *request);
 /**
  * Reads data from the given source until a complete HTTP document is parsed. Aborts when it's obvious that the document is malformed.
  * @param stream the data source to read from
- * @returns 0 when successful, non-0 when any error occurs reading from the file descriptor or if the content is malformed
+ * @returns 0 when successful, non-0 when any error occurs reading from the stream or if the content is malformed
  */
 int http_request_parse(http_request *request, stream *stream);
 
+void http_response_init(http_response *response);
+void http_response_dealloc(http_response *response);
+int http_response_get_status_code(http_response *response);
+void http_response_set_status_code(http_response *response, int status_code);
+string *http_response_get_reason_phrase(http_response *response);
+http_headers *http_response_get_headers(http_response *response);
+stream *http_response_get_body(http_response *response);
 /**
- * Writes the given status and headers to the destination stream
- * @param dst where to write the response to
- * @param status_code the HTTP status code
- * @param headers optional, the headers to include in the response
- * @returns 0 when successful, non-0 for failure
+ * Serializes this response to the destination stream.
+ * @param stream the stream to write to
+ * @returns 0 when successful, non-0 when any error occurs writing to the stream
  */
-int http_response_write(stream *dst, int status_code, http_headers *headers);
-/**
- * As http_response_write, but also writes the given body if provided. If a body is provided, the Content-Length header is updated to match
- * the length.
- * @param dst where to write the response to
- * @param status_code the HTTP status code
- * @param headers optional, the headers to include in the response
- * @param body optional, the body to include in the response
- * @param body_len if body is provided must be set to the length of the body
- * @returns 0 when successful, non-0 for failure
- */
-int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len);
-/**
- * As http_response_write_data, but provide the body as a buffer.
- */
-int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body);
-/**
- * As http_response_write_data, but provide the body as a string.
- */
-int http_response_write_str(stream *dst, int status_code, http_headers *headers, string *body);
-/**
- * As http_response_write_data, but provide the body as a 0-terminated c string.
- */
-int http_response_write_cstr(stream *dst, int status_code, http_headers *headers, char *body);
-/**
- * As http_response_write_data, but provide the body as a stream. Available bytes from the stream are read into temporary buffer first so
- * the full length can be calculated.
- */
-int http_response_write_stream(stream *dst, int status_code, http_headers *headers, stream *body);
+int http_response_write(http_response *response, stream *stream);
 
 #ifdef __cplusplus
 }

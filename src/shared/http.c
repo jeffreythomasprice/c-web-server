@@ -158,6 +158,18 @@ void http_request_dealloc(http_request *request) {
 	buffer_dealloc(&request->body);
 }
 
+string *http_request_get_method(http_request *request) {
+	return &request->method;
+}
+
+string *http_request_get_uri(http_request *request) {
+	return &request->uri;
+}
+
+http_headers *http_request_get_headers(http_request *request) {
+	return &request->headers;
+}
+
 int http_request_parse(http_request *request, stream *stream) {
 	buffer_clear(&request->read_buf);
 	string_clear(&request->method);
@@ -342,235 +354,213 @@ int http_request_parse(http_request *request, stream *stream) {
 	return 0;
 }
 
-int http_response_write(stream *dst, int status_code, http_headers *headers) {
-	string scratch, error;
-	string_init(&scratch);
-	string_init(&error);
-	int result;
+void http_response_init(http_response *response) {
+	string_init(&response->scratch);
+	string_init(&response->reason_phrase);
+	http_response_set_status_code(response, 200);
+	http_headers_init(&response->headers);
+	buffer_init(&response->body_buffer);
+	stream_init_buffer(&response->body_stream, &response->body_buffer, 0);
+}
 
-	string_append_cstrf(&scratch, "    status_code %i\n", status_code);
-	http_headers_to_string(headers, &scratch, "    ");
-	log_trace("TODO JEFF http_response_write\n%s\n", string_get_cstr(&scratch));
+void http_response_dealloc(http_response *response) {
+	http_headers_dealloc(&response->headers);
+	buffer_dealloc(&response->body_buffer);
+	if (stream_dealloc(&response->body_stream, &response->scratch)) {
+		log_error("error deallocating response body stream: %s\n", &response->scratch);
+	}
+	string_dealloc(&response->scratch);
+}
 
-	char *reason_phrase;
+int http_response_get_status_code(http_response *response) {
+	return response->status_code;
+}
+
+void http_response_set_status_code(http_response *response, int status_code) {
+	response->status_code = status_code;
 	switch (status_code) {
 	case 100:
-		reason_phrase = "Continue";
+		string_set_cstr(&response->reason_phrase, "Continue");
 		break;
 	case 101:
-		reason_phrase = "Switching Protocols";
+		string_set_cstr(&response->reason_phrase, "Switching Protocols");
 		break;
 	case 200:
-		reason_phrase = "OK";
+		string_set_cstr(&response->reason_phrase, "OK");
 		break;
 	case 201:
-		reason_phrase = "Created";
+		string_set_cstr(&response->reason_phrase, "Created");
 		break;
 	case 202:
-		reason_phrase = "Accepted";
+		string_set_cstr(&response->reason_phrase, "Accepted");
 		break;
 	case 203:
-		reason_phrase = "Non-Authoritative Information";
+		string_set_cstr(&response->reason_phrase, "Non-Authoritative Information");
 		break;
 	case 204:
-		reason_phrase = "No Content";
+		string_set_cstr(&response->reason_phrase, "No Content");
 		break;
 	case 205:
-		reason_phrase = "Reset Content";
+		string_set_cstr(&response->reason_phrase, "Reset Content");
 		break;
 	case 206:
-		reason_phrase = "Partial Content";
+		string_set_cstr(&response->reason_phrase, "Partial Content");
 		break;
 	case 300:
-		reason_phrase = "Multiple Choices";
+		string_set_cstr(&response->reason_phrase, "Multiple Choices");
 		break;
 	case 301:
-		reason_phrase = "Moved Permanently";
+		string_set_cstr(&response->reason_phrase, "Moved Permanently");
 		break;
 	case 302:
-		reason_phrase = "Found";
+		string_set_cstr(&response->reason_phrase, "Found");
 		break;
 	case 303:
-		reason_phrase = "See Other";
+		string_set_cstr(&response->reason_phrase, "See Other");
 		break;
 	case 304:
-		reason_phrase = "Not Modified";
+		string_set_cstr(&response->reason_phrase, "Not Modified");
 		break;
 	case 305:
-		reason_phrase = "Use Proxy";
+		string_set_cstr(&response->reason_phrase, "Use Proxy");
 		break;
 	case 307:
-		reason_phrase = "Temporary Redirect";
+		string_set_cstr(&response->reason_phrase, "Temporary Redirect");
 		break;
 	case 400:
-		reason_phrase = "Bad Request";
+		string_set_cstr(&response->reason_phrase, "Bad Request");
 		break;
 	case 401:
-		reason_phrase = "Unauthorized";
+		string_set_cstr(&response->reason_phrase, "Unauthorized");
 		break;
 	case 402:
-		reason_phrase = "Payment Required";
+		string_set_cstr(&response->reason_phrase, "Payment Required");
 		break;
 	case 403:
-		reason_phrase = "Forbidden";
+		string_set_cstr(&response->reason_phrase, "Forbidden");
 		break;
 	case 404:
-		reason_phrase = "Not Found";
+		string_set_cstr(&response->reason_phrase, "Not Found");
 		break;
 	case 405:
-		reason_phrase = "Method Not Allowed";
+		string_set_cstr(&response->reason_phrase, "Method Not Allowed");
 		break;
 	case 406:
-		reason_phrase = "Not Acceptable";
+		string_set_cstr(&response->reason_phrase, "Not Acceptable");
 		break;
 	case 407:
-		reason_phrase = "Proxy Authentication Required";
+		string_set_cstr(&response->reason_phrase, "Proxy Authentication Required");
 		break;
 	case 408:
-		reason_phrase = "Request Time-out";
+		string_set_cstr(&response->reason_phrase, "Request Time-out");
 		break;
 	case 409:
-		reason_phrase = "Conflict";
+		string_set_cstr(&response->reason_phrase, "Conflict");
 		break;
 	case 410:
-		reason_phrase = "Gone";
+		string_set_cstr(&response->reason_phrase, "Gone");
 		break;
 	case 411:
-		reason_phrase = "Length Required";
+		string_set_cstr(&response->reason_phrase, "Length Required");
 		break;
 	case 412:
-		reason_phrase = "Precondition Failed";
+		string_set_cstr(&response->reason_phrase, "Precondition Failed");
 		break;
 	case 413:
-		reason_phrase = "Request Entity Too Large";
+		string_set_cstr(&response->reason_phrase, "Request Entity Too Large");
 		break;
 	case 414:
-		reason_phrase = "Request-URI Too Large";
+		string_set_cstr(&response->reason_phrase, "Request-URI Too Large");
 		break;
 	case 415:
-		reason_phrase = "Unsupported Media Type";
+		string_set_cstr(&response->reason_phrase, "Unsupported Media Type");
 		break;
 	case 416:
-		reason_phrase = "Requested range not satisfiable";
+		string_set_cstr(&response->reason_phrase, "Requested range not satisfiable");
 		break;
 	case 417:
-		reason_phrase = "Expectation Failed";
+		string_set_cstr(&response->reason_phrase, "Expectation Failed");
 		break;
 	case 500:
-		reason_phrase = "Internal Server Error";
+		string_set_cstr(&response->reason_phrase, "Internal Server Error");
 		break;
 	case 501:
-		reason_phrase = "Not Implemented";
+		string_set_cstr(&response->reason_phrase, "Not Implemented");
 		break;
 	case 502:
-		reason_phrase = "Bad Gateway";
+		string_set_cstr(&response->reason_phrase, "Bad Gateway");
 		break;
 	case 503:
-		reason_phrase = "Service Unavailable";
+		string_set_cstr(&response->reason_phrase, "Service Unavailable");
 		break;
 	case 504:
-		reason_phrase = "Gateway Time-out";
+		string_set_cstr(&response->reason_phrase, "Gateway Time-out");
 		break;
 	case 505:
-		reason_phrase = "HTTP Version not supported";
+		string_set_cstr(&response->reason_phrase, "HTTP Version not supported");
 		break;
 	default:
-		reason_phrase = "Other";
+		string_set_cstr(&response->reason_phrase, "Other");
 	}
+}
+
+string *http_response_get_reason_phrase(http_response *response) {
+	return &response->reason_phrase;
+}
+
+http_headers *http_response_get_headers(http_response *response) {
+	return &response->headers;
+}
+
+stream *http_response_get_body(http_response *response) {
+	return &response->body_stream;
+}
+
+int http_response_write(http_response *response, stream *stream) {
+	string_clear(&response->scratch);
+	string_append_cstrf(&response->scratch, "serializing response %i %s\n", response->status_code,
+						string_get_cstr(&response->reason_phrase));
+	http_headers_to_string(&response->headers, &response->scratch, "    ");
+	string_append_cstrf(&response->scratch, "    body: %zu bytes\n", buffer_get_length(&response->body_buffer));
+	log_trace("%s\n", string_get_cstr(&response->scratch));
 
 	// status line
-	if (stream_write_cstrf(dst, &error, "HTTP/1.1 %i %s\r\n", status_code, reason_phrase) < 0) {
-		log_error("error writing status line: %s\n", string_get_cstr(&error));
-		result = 1;
-		goto DONE;
+	if (stream_write_cstrf(stream, &response->scratch, "HTTP/1.1 %i %s\r\n", response->status_code,
+						   string_get_cstr(&response->reason_phrase)) < 0) {
+		log_error("error writing status line: %s\n", string_get_cstr(&response->scratch));
+		return 1;
 	}
 
-	// TODO JEFF write headers
-	log_trace("TODO JEFF write headers\n");
-
-	// success
-	result = 0;
-DONE:
-	string_dealloc(&error);
-	string_dealloc(&scratch);
-	return result;
-}
-
-int http_response_write_data(stream *dst, int status_code, http_headers *headers, void *body, size_t body_len) {
-	// headers are optionally, but we might need to create some if we have a response body
-	http_headers local_headers;
-	int should_dealloc_headers = 0;
-	if (body && body_len > 0) {
-		// allocate some headers if needed
-		if (!headers) {
-			http_headers_init(&local_headers);
-			should_dealloc_headers = 1;
-			headers = &local_headers;
+	// headers
+	for (size_t i = 0; i < http_headers_get_num(&response->headers); i++) {
+		http_header *header = http_headers_get(&response->headers, i);
+		if (stream_write_cstrf(stream, &response->scratch, "%s: ", string_get_cstr(http_header_get_name(header))) < 0) {
+			log_error("error writing header name (%zu): %s\n", i, string_get_cstr(&response->scratch));
+			return 1;
 		}
-		// update content length to match the given body
-		http_header *content_length_header = http_headers_get_cstr(headers, "Content-Length", 1);
-		http_header_clear(content_length_header);
-		string *content_length_value = http_header_append_value(content_length_header);
-		string_append_cstrf(content_length_value, "%zu", body_len);
+		for (size_t j = 0; j < http_header_get_num_values(header); j++) {
+			string *value = http_header_get_value(header, j);
+			if (j > 0) {
+				if (stream_write_cstrf(stream, &response->scratch, ",") < 0) {
+					log_error("error writing header value separator (%zu, %zu): %s\n", i, j, string_get_cstr(&response->scratch));
+					return 1;
+				}
+			}
+			if (stream_write_cstrf(stream, &response->scratch, "%s", string_get_cstr(value)) < 0) {
+				log_error("error writing header value (%zu, %zu): %s\n", i, j, string_get_cstr(&response->scratch));
+				return 1;
+			}
+			if (stream_write_cstrf(stream, &response->scratch, "\r\n") < 0) {
+				log_error("error writing header line break (%zu, %zu): %s\n", i, j, string_get_cstr(&response->scratch));
+				return 1;
+			}
+		}
 	}
-	// write everything but the body
-	int result = http_response_write(dst, status_code, headers);
-	if (result) {
-		goto DONE;
-	}
-	// write the body
-	string error;
-	string_init(&error);
-	result = stream_write(dst, body, body_len, &error);
-	if (result < 0) {
-		log_error("error writing response body to stream: %s\n", string_get_cstr(&error));
-		goto DONE;
-	}
-	string_dealloc(&error);
-	// success
-	result = 0;
-DONE:
-	if (should_dealloc_headers) {
-		http_headers_dealloc(&local_headers);
-	}
-	return result;
-}
 
-int http_response_write_buffer(stream *dst, int status_code, http_headers *headers, buffer *body) {
-	if (!body || buffer_get_length(body) == 0) {
-		return http_response_write(dst, status_code, headers);
+	// body
+	if (buffer_get_length(&response->body_buffer) > 0) {
+		log_trace("TODO JEFF write body");
 	}
-	return http_response_write_data(dst, status_code, headers, body->data, body->length);
-}
 
-int http_response_write_str(stream *dst, int status_code, http_headers *headers, string *body) {
-	if (!body || string_get_length(body) == 0) {
-		return http_response_write(dst, status_code, headers);
-	}
-	return http_response_write_data(dst, status_code, headers, string_get_cstr(body), string_get_length(body));
-}
-
-int http_response_write_cstr(stream *dst, int status_code, http_headers *headers, char *body) {
-	size_t len = 0;
-	if (body) {
-		len = strlen(body);
-	}
-	if (!body || len == 0) {
-		return http_response_write(dst, status_code, headers);
-	}
-	return http_response_write_data(dst, status_code, headers, body, len);
-}
-
-int http_response_write_stream(stream *dst, int status_code, http_headers *headers, stream *body) {
-	if (!body) {
-		return http_response_write(dst, status_code, headers);
-	}
-	buffer b;
-	buffer_init(&b);
-	int result = stream_read_all_into_buffer(body, &b, 0, 1024, NULL);
-	if (result > 0) {
-		result = http_response_write_buffer(dst, status_code, headers, &b);
-	}
-	buffer_dealloc(&b);
-	return result;
+	return 0;
 }

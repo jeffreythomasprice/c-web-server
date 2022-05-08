@@ -292,71 +292,49 @@ void parse_request_delete_no_body() {
 	http_request_dealloc(&request);
 }
 
-void response_no_headers_no_body(char *expected_response, int status_code) {
+void assert_response_writes_to(http_response *response, char *expected) {
+	size_t expected_len = strlen(expected);
 	buffer b;
 	stream s;
 	buffer_init(&b);
 	stream_init_buffer(&s, &b, 1);
-
-	assert(http_response_write(&s, status_code, NULL) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-
-	// now do the same thing with every variant, passing null for the body
-	// this proves null checks work
-	stream_set_position(&s, 0);
-	assert(http_response_write_data(&s, status_code, NULL, NULL, 0) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-	stream_set_position(&s, 0);
-	assert(http_response_write_buffer(&s, status_code, NULL, NULL) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-	stream_set_position(&s, 0);
-	assert(http_response_write_str(&s, status_code, NULL, NULL) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-	stream_set_position(&s, 0);
-	assert(http_response_write_cstr(&s, status_code, NULL, NULL) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-	stream_set_position(&s, 0);
-	assert(http_response_write_stream(&s, status_code, NULL, NULL) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-
+	http_response_write(response, &s);
+	size_t b_len = buffer_get_length(&b);
+	buffer_append_bytes(&b, "", 1);
+	log_trace("checking response data (len %zu):\n%s\nagainst expected data (len %zu):\n%s\n", b_len, b.data, expected_len, expected);
+	assert(b_len == expected_len);
+	assert(memcmp(b.data, expected, b_len) == 0);
 	stream_dealloc(&s, NULL);
 }
 
-void response_headers_no_body(char *expected_response, int status_code, size_t num_headers, ...) {
-	buffer b;
-	stream s;
-	buffer_init(&b);
-	stream_init_buffer(&s, &b, 1);
-
-	http_headers headers;
-	http_headers_init(&headers);
-
-	http_headers_clear(&headers);
-	va_list args;
-	va_start(args, num_headers);
-	for (size_t i = 0; i < num_headers; i++) {
-		http_header *header = http_headers_get_cstr(&headers, va_arg(args, char *), 1);
-		string *value = http_header_append_value(header);
-		string_set_cstr(value, va_arg(args, char *));
-	}
-	va_end(args);
-
-	assert(http_response_write(&s, status_code, &headers) == 0);
-	assert(buffer_get_length(&b) == strlen(expected_response));
-	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
-
-	http_headers_dealloc(&headers);
-
-	stream_dealloc(&s, NULL);
+void response_no_headers_no_body() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 200);
+	assert_response_writes_to(&response, "HTTP/1.1 200 OK\r\n");
+	http_response_dealloc(&response);
 }
 
-// TODO JEFF tests with body
+void response_headers_no_body() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 400);
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "bar");
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "baz", 1)), "42");
+	assert_response_writes_to(&response, "HTTP/1.1 400 Bad Request\r\nfoo: bar\r\nbaz: 42\r\n");
+	http_response_dealloc(&response);
+}
+
+/*
+TODO JEFF tests to do with responses
+
+make sure one of these has headers with multiple values
+
+status code, no headers, body (should auto add content-length)
+status code, headers (missing content-length), body (should auto add content-length)
+status code, headers (content-length, matching body), body
+status code, headers (content-lenmgth, not matching body), body (should fix content-length)
+*/
 
 int main() {
 	header();
@@ -368,8 +346,7 @@ int main() {
 	parse_request_put_no_body();
 	parse_request_put_with_body_text();
 	parse_request_delete_no_body();
-	response_no_headers_no_body("HTTP/1.1 200 OK\r\n", 200);
-	response_headers_no_body("HTTP/1.1 404 Not Found\r\n", 404, 1, "foo", "bar");
-	// TODO JEFF more versions of response testing
+	response_no_headers_no_body();
+	response_headers_no_body();
 	return 0;
 }
