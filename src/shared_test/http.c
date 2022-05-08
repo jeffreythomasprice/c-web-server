@@ -311,7 +311,7 @@ void response_no_headers_no_body() {
 	http_response response;
 	http_response_init(&response);
 	http_response_set_status_code(&response, 200);
-	assert_response_writes_to(&response, "HTTP/1.1 200 OK\r\n");
+	assert_response_writes_to(&response, "HTTP/1.1 200 OK\r\n\r\n");
 	http_response_dealloc(&response);
 }
 
@@ -321,20 +321,64 @@ void response_headers_no_body() {
 	http_response_set_status_code(&response, 400);
 	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "bar");
 	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "baz", 1)), "42");
-	assert_response_writes_to(&response, "HTTP/1.1 400 Bad Request\r\nfoo: bar\r\nbaz: 42\r\n");
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "asdf");
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "widget");
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "bang");
+	assert_response_writes_to(&response, "HTTP/1.1 400 Bad Request\r\nfoo: bar,asdf,widget,bang\r\nbaz: 42\r\n\r\n");
 	http_response_dealloc(&response);
 }
 
-/*
-TODO JEFF tests to do with responses
+void response_headers_content_length_matches_body() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 401);
+	// intentionally lower case to not match the default in serializatino, so it proves that it doesn't adjust the existing content length
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "content-length", 1)), "13");
+	stream_write_cstr(http_response_get_body(&response), "Hello, World!", NULL);
+	assert_response_writes_to(&response, "HTTP/1.1 401 Unauthorized\r\ncontent-length: 13\r\n\r\nHello, World!");
+	http_response_dealloc(&response);
+}
 
-make sure one of these has headers with multiple values
+void response_headers_content_length_missing() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 401);
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "foo", 1)), "bar");
+	stream_write_cstr(http_response_get_body(&response), "Hello, World!", NULL);
+	assert_response_writes_to(&response, "HTTP/1.1 401 Unauthorized\r\nfoo: bar\r\nContent-Length: 13\r\n\r\nHello, World!");
+	http_response_dealloc(&response);
+}
 
-status code, no headers, body (should auto add content-length)
-status code, headers (missing content-length), body (should auto add content-length)
-status code, headers (content-length, matching body), body
-status code, headers (content-lenmgth, not matching body), body (should fix content-length)
-*/
+void response_headers_content_length_wrong() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 401);
+	stream_write_cstr(http_response_get_body(&response), "Hello, World!", NULL);
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "Content-Length", 1)), "57");
+	assert_response_writes_to(&response, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 13\r\n\r\nHello, World!");
+	http_response_dealloc(&response);
+}
+
+void response_headers_content_length_not_integer() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 401);
+	stream_write_cstr(http_response_get_body(&response), "Hello, World!", NULL);
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "Content-Length", 1)), "foobar");
+	assert_response_writes_to(&response, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 13\r\n\r\nHello, World!");
+	http_response_dealloc(&response);
+}
+
+void response_headers_content_length_multiple() {
+	http_response response;
+	http_response_init(&response);
+	http_response_set_status_code(&response, 401);
+	stream_write_cstr(http_response_get_body(&response), "Hello, World!", NULL);
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "Content-Length", 1)), "13");
+	string_set_cstr(http_header_append_value(http_headers_get_cstr(http_response_get_headers(&response), "Content-Length", 1)), "100");
+	assert_response_writes_to(&response, "HTTP/1.1 401 Unauthorized\r\nContent-Length: 13\r\n\r\nHello, World!");
+	http_response_dealloc(&response);
+}
 
 int main() {
 	header();
@@ -348,5 +392,10 @@ int main() {
 	parse_request_delete_no_body();
 	response_no_headers_no_body();
 	response_headers_no_body();
+	response_headers_content_length_matches_body();
+	response_headers_content_length_missing();
+	response_headers_content_length_wrong();
+	response_headers_content_length_not_integer();
+	response_headers_content_length_multiple();
 	return 0;
 }

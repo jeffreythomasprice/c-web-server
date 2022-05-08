@@ -27,7 +27,6 @@ void http_header_dealloc(http_header *header) {
 }
 
 void http_header_clear(http_header *header) {
-	string_clear(&header->name);
 	header->values_length = 0;
 }
 
@@ -531,6 +530,32 @@ int http_response_write(http_response *response, stream *stream) {
 		return 1;
 	}
 
+	// fix the content length header first
+	if (buffer_get_length(&response->body_buffer) > 0) {
+		http_header *content_length_header = http_headers_get_cstr(&response->headers, "Content-Length", 1);
+		// check to see if the content length header is already set to the correct value
+		// check number of values, anything but exactly one value is obviously not correct
+		if (http_header_get_num_values(content_length_header) != 1) {
+			http_header_clear(content_length_header);
+		} else {
+			// get the actual value
+			size_t content_length_header_value;
+			if (sscanf(string_get_cstr(http_header_get_value(content_length_header, 0)), "%zu", &content_length_header_value) == 1) {
+				// it's an intenger, is it the right value already?
+				if (content_length_header_value != buffer_get_length(&response->body_buffer)) {
+					http_header_clear(content_length_header);
+				}
+			} else {
+				// not the right value
+				http_header_clear(content_length_header);
+			}
+		}
+		// if we ended up clearing the header add the correct value back
+		if (http_header_get_num_values(content_length_header) == 0) {
+			string_set_cstrf(http_header_append_value(content_length_header), "%zu", buffer_get_length(&response->body_buffer));
+		}
+	}
+
 	// headers
 	for (size_t i = 0; i < http_headers_get_num(&response->headers); i++) {
 		http_header *header = http_headers_get(&response->headers, i);
@@ -550,17 +575,25 @@ int http_response_write(http_response *response, stream *stream) {
 				log_error("error writing header value (%zu, %zu): %s\n", i, j, string_get_cstr(&response->scratch));
 				return 1;
 			}
-			if (stream_write_cstrf(stream, &response->scratch, "\r\n") < 0) {
-				log_error("error writing header line break (%zu, %zu): %s\n", i, j, string_get_cstr(&response->scratch));
-				return 1;
-			}
+		}
+		if (stream_write_cstrf(stream, &response->scratch, "\r\n") < 0) {
+			log_error("error writing header line break (%zu): %s\n", i, string_get_cstr(&response->scratch));
+			return 1;
 		}
 	}
 
-	// body
-	if (buffer_get_length(&response->body_buffer) > 0) {
-		log_trace("TODO JEFF write body");
+	// separator between headers and body
+	if (stream_write_cstrf(stream, &response->scratch, "\r\n") < 0) {
+		log_error("error writing extra line break between headers and body: %s\n", string_get_cstr(&response->scratch));
+		return 1;
 	}
 
+	// body
+	if (stream_write_buffer(stream, &response->body_buffer, &response->scratch) < 0) {
+		log_error("error writing body: %s\n", string_get_cstr(&response->scratch));
+		return 1;
+	}
+
+	// success
 	return 0;
 }
