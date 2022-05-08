@@ -292,23 +292,71 @@ void parse_request_delete_no_body() {
 	http_request_dealloc(&request);
 }
 
-void response_no_headers_no_body(int status_code, char *expected_response) {
+void response_no_headers_no_body(char *expected_response, int status_code) {
 	buffer b;
 	stream s;
 	buffer_init(&b);
 	stream_init_buffer(&s, &b, 1);
 
 	assert(http_response_write(&s, status_code, NULL) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+
+	// now do the same thing with every variant, passing null for the body
+	// this proves null checks work
+	stream_set_position(&s, 0);
+	assert(http_response_write_data(&s, status_code, NULL, NULL, 0) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+	stream_set_position(&s, 0);
+	assert(http_response_write_buffer(&s, status_code, NULL, NULL) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+	stream_set_position(&s, 0);
+	assert(http_response_write_str(&s, status_code, NULL, NULL) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+	stream_set_position(&s, 0);
+	assert(http_response_write_cstr(&s, status_code, NULL, NULL) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+	stream_set_position(&s, 0);
+	assert(http_response_write_stream(&s, status_code, NULL, NULL) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
 	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
 
 	stream_dealloc(&s, NULL);
 }
 
-// TODO JEFF test for http_response_write_data
-// TODO JEFF test for http_response_write_buffer
-// TODO JEFF test for http_response_write_str
-// TODO JEFF test for http_response_write_cstr
-// TODO JEFF test for http_response_write_stream
+void response_headers_no_body(char *expected_response, int status_code, size_t num_headers, ...) {
+	buffer b;
+	stream s;
+	buffer_init(&b);
+	stream_init_buffer(&s, &b, 1);
+
+	http_headers headers;
+	http_headers_init(&headers);
+
+	http_headers_clear(&headers);
+	va_list args;
+	va_start(args, num_headers);
+	for (size_t i = 0; i < num_headers; i++) {
+		http_header *header = http_headers_get_cstr(&headers, va_arg(args, char *), 1);
+		string *value = http_header_append_value(header);
+		string_set_cstr(value, va_arg(args, char *));
+	}
+	va_end(args);
+
+	assert(http_response_write(&s, status_code, &headers) == 0);
+	assert(buffer_get_length(&b) == strlen(expected_response));
+	assert(memcmp(b.data, expected_response, strlen(expected_response)) == 0);
+
+	http_headers_dealloc(&headers);
+
+	stream_dealloc(&s, NULL);
+}
+
+// TODO JEFF tests with body
 
 int main() {
 	header();
@@ -320,7 +368,8 @@ int main() {
 	parse_request_put_no_body();
 	parse_request_put_with_body_text();
 	parse_request_delete_no_body();
-	response_no_headers_no_body(200, "HTTP/1.1 200 OK\r\n");
+	response_no_headers_no_body("HTTP/1.1 200 OK\r\n", 200);
+	response_headers_no_body("HTTP/1.1 404 Not Found\r\n", 404, 1, "foo", "bar");
 	// TODO JEFF more versions of response testing
 	return 0;
 }

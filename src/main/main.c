@@ -88,7 +88,7 @@ void socket_accept(int s) {
 		// we did enqueue, it's just taking a long time
 		// make sure to break any existing read so the read times out
 		shutdown(s, SHUT_RDWR);
-		// TODO indicate to task that it needs to send a timeout http response?
+		// TODO indicate to task that it needs to send a timeout http response? status code = 408
 		break;
 	default:
 		log_error("failed to execute incoming request, %i\n", enqueue_error);
