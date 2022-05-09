@@ -611,18 +611,6 @@ int http_response_write(http_response *response, stream *stream) {
 }
 
 // private
-typedef struct {
-	http_server *server;
-	string scratch;
-	string request_address;
-	uint16_t request_port;
-	http_request request;
-	http_response response;
-	int socket;
-	stream socket_stream;
-} http_server_task_data;
-
-// private
 void http_server_finalize_task(http_server_task_data *data) {
 	log_trace("responding to request %s:%i %s %s\n", string_get_cstr(&data->request_address), data->request_port,
 			  string_get_cstr(http_request_get_method(&data->request)), string_get_cstr(http_request_get_uri(&data->request)));
@@ -636,12 +624,19 @@ void http_server_finalize_task(http_server_task_data *data) {
 		log_error("failed to close HTTP request socket stream: %s\n", string_get_cstr(&data->scratch));
 	}
 
-	// TODO JEFF put task back on pool
-	string_dealloc(&data->scratch);
-	string_dealloc(&data->request_address);
-	http_request_dealloc(&data->request);
-	http_response_dealloc(&data->response);
-	free(data);
+	// put task back on pool
+	if (pthread_mutex_lock(&data->server->task_pool_mutex)) {
+		log_error("error locking http server task pool\n");
+		close(data->socket);
+		return;
+	}
+	data->next = data->server->task_pool;
+	data->server->task_pool = data;
+	data->server->task_pool_len++;
+	log_trace("put http server task data back on the pool, there are now %zu tasks in the pool\n", data->server->task_pool_len);
+	if (pthread_mutex_unlock(&data->server->task_pool_mutex)) {
+		log_error("error unlock http server task pool\n");
+	}
 }
 
 // private
@@ -679,14 +674,32 @@ DONE:
 void http_server_socket_accept(void *data, string *address, uint16_t port, int socket) {
 	http_server *server = data;
 
-	// TODO JEFF grab tasks off a pool
-	// allocate a new task
-	http_server_task_data *task_data = malloc(sizeof(http_server_task_data));
-	task_data->server = server;
-	string_init(&task_data->scratch);
-	string_init(&task_data->request_address);
-	http_request_init(&task_data->request);
-	http_response_init(&task_data->response);
+	// grab a task off the pool
+	if (pthread_mutex_lock(&server->task_pool_mutex)) {
+		log_error("error locking http server task pool\n");
+		close(socket);
+		return;
+	}
+	http_server_task_data *task_data;
+	if (server->task_pool) {
+		// a task is available so use that
+		task_data = server->task_pool;
+		server->task_pool = server->task_pool->next;
+		server->task_pool_len--;
+		log_trace("http server task pool had an available task, there are %zu tasks remaining in the pool\n", server->task_pool_len);
+	} else {
+		// allocate a new task
+		log_trace("http server task pool was empty, allocating new task data\n");
+		task_data = malloc(sizeof(http_server_task_data));
+		task_data->server = server;
+		string_init(&task_data->scratch);
+		string_init(&task_data->request_address);
+		http_request_init(&task_data->request);
+		http_response_init(&task_data->response);
+	}
+	if (pthread_mutex_unlock(&server->task_pool_mutex)) {
+		log_error("error unlock http server task pool\n");
+	}
 
 	// remember where this request came from
 	string_set_str(&task_data->request_address, address);
@@ -739,22 +752,49 @@ int http_server_init(http_server *server, http_server_func callback, void *callb
 	server->callback = callback;
 	server->timeout = timeout;
 
+	int result = 0;
+	int socket_init = 0;
+	int thread_pool_init = 0;
+	int mutex_init = 0;
+
 	if (tcp_socket_wrapper_init(&server->socket, address, port, http_server_socket_accept, server)) {
 		log_error("failed to open the http server socket\n");
-		return 1;
+		result = 1;
+		goto DONE;
 	}
+	socket_init = 1;
 
 	if (worker_thread_pool_init(&server->thread_pool, num_threads, queue_size)) {
 		log_error("failed to initialize the http server thread pool\n");
-		if (tcp_socket_wrapper_dealloc(&server->socket)) {
-			log_error("failed to close the http server socket after a previous failure to initialize the http server\n");
-		}
-		return 1;
+		result = 1;
+		goto DONE;
 	}
+	thread_pool_init = 1;
+
+	if (pthread_mutex_init(&server->task_pool_mutex, NULL)) {
+		log_error("failed to allocate mutex for task pool\n");
+		result = 1;
+		goto DONE;
+	}
+	mutex_init = 1;
+	server->task_pool_len = 0;
+	server->task_pool = NULL;
 
 	log_debug("http server started at %s:%i\n", string_get_cstr(tcp_socket_wrapper_get_address(&server->socket)),
 			  tcp_socket_wrapper_get_port(&server->socket));
-	return 0;
+DONE:
+	if (result) {
+		if (socket_init && tcp_socket_wrapper_dealloc(&server->socket)) {
+			log_error("failed to close the http server socket after a previous failure to initialize the http server\n");
+		}
+		if (thread_pool_init && worker_thread_pool_dealloc(&server->thread_pool)) {
+			log_error("failed to clean up the thread pool after a previous failure to initialize the http server\n");
+		}
+		if (mutex_init && pthread_mutex_destroy(&server->task_pool_mutex)) {
+			log_error("failed to clean up task pool mutex after a previous failure to initialize the http server\n");
+		}
+	}
+	return result;
 }
 
 int http_server_dealloc(http_server *server) {
@@ -764,8 +804,22 @@ int http_server_dealloc(http_server *server) {
 		result = 1;
 	}
 	if (worker_thread_pool_dealloc(&server->thread_pool)) {
-		log_error("failed to close the http server thread pool");
+		log_error("failed to close the http server thread pool\n");
 		result = 1;
 	}
+	if (pthread_mutex_destroy(&server->task_pool_mutex)) {
+		log_error("failed to clean up the task pool mutex\n");
+		result = 1;
+	}
+	while (server->task_pool) {
+		http_server_task_data *data = server->task_pool;
+		server->task_pool = server->task_pool->next;
+		string_dealloc(&data->scratch);
+		string_dealloc(&data->request_address);
+		http_request_dealloc(&data->request);
+		http_response_dealloc(&data->response);
+		free(data);
+	}
+	free(server->task_pool);
 	return result;
 }

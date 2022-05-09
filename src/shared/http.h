@@ -52,12 +52,30 @@ typedef struct {
 
 typedef int (*http_server_func)(void *data, http_request *request, http_response *response);
 
-typedef struct {
+struct http_server_task_data;
+struct http_server;
+
+typedef struct http_server_task_data {
+	struct http_server_task_data *next;
+	struct http_server *server;
+	string scratch;
+	string request_address;
+	uint16_t request_port;
+	http_request request;
+	http_response response;
+	int socket;
+	stream socket_stream;
+} http_server_task_data;
+
+typedef struct http_server {
 	http_server_func callback;
 	void *callback_data;
 	uint64_t timeout;
 	tcp_socket_wrapper socket;
 	worker_thread_pool thread_pool;
+	pthread_mutex_t task_pool_mutex;
+	size_t task_pool_len;
+	http_server_task_data *task_pool;
 } http_server;
 
 void http_header_init(http_header *header);
