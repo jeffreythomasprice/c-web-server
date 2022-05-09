@@ -86,7 +86,7 @@ void *worker_thread_pool_pthread_callback(void *data) {
 	return NULL;
 }
 
-int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue_size) {
+worker_thread_pool_error worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue_size) {
 	log_trace("worker_thread_pool_init, num_threads=%i, queue_size=%i\n", num_threads, queue_size);
 	if (num_threads < 1) {
 		log_error("worker_thread_pool_init failed, num_threads must be positive\n");
@@ -131,7 +131,7 @@ int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int queue
 	return WORKER_THREAD_POOL_SUCCESS;
 }
 
-int worker_thread_pool_dealloc(worker_thread_pool *pool) {
+worker_thread_pool_error worker_thread_pool_dealloc(worker_thread_pool *pool) {
 	log_trace("worker_thread_pool_dealloc start\n");
 	// all threads should be exiting
 	if (pool->threads) {
@@ -186,8 +186,8 @@ int worker_thread_pool_dealloc(worker_thread_pool *pool) {
 	return WORKER_THREAD_POOL_SUCCESS;
 }
 
-int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data, int *callback_result,
-							   uint64_t timeout) {
+worker_thread_pool_error worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data,
+													int *callback_result, uint64_t timeout) {
 	log_trace("worker_thread_pool_enqueue start\n");
 	if (!callback) {
 		log_error("worker_thread_pool_enqueue failed, callback is required\n");

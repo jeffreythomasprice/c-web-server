@@ -9,11 +9,12 @@
 extern "C" {
 #endif
 
-// TODO thread pool errors should be an enum
-#define WORKER_THREAD_POOL_SUCCESS 0
-#define WORKER_THREAD_POOL_ERROR 1
-#define WORKER_THREAD_POOL_ERROR_QUEUE_FULL 1
-#define WORKER_THREAD_POOL_ERROR_TIMEOUT 2
+typedef enum {
+	WORKER_THREAD_POOL_SUCCESS = 0,
+	WORKER_THREAD_POOL_ERROR = 1,
+	WORKER_THREAD_POOL_ERROR_QUEUE_FULL = 1,
+	WORKER_THREAD_POOL_ERROR_TIMEOUT = 2
+} worker_thread_pool_error;
 
 typedef struct worker_thread_pool worker_thread_pool;
 
@@ -72,14 +73,14 @@ Returns WORKER_THREAD_POOL_SUCCESS on success, WORKER_THREAD_POOL_ERROR on failu
 
 Fails if any of the inputs are invalid. Number of threads and queue size must be positive.
 */
-int worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int max_queue_size);
+worker_thread_pool_error worker_thread_pool_init(worker_thread_pool *pool, int num_threads, int max_queue_size);
 
 /*
 Stops all worker threads and waits until all are completed. Frees all resources.
 
 Returns WORKER_THREAD_POOL_SUCCESS on success, WORKER_THREAD_POOL_ERROR on failure.
 */
-int worker_thread_pool_dealloc(worker_thread_pool *pool);
+worker_thread_pool_error worker_thread_pool_dealloc(worker_thread_pool *pool);
 
 /*
 Enqueues a new job in the queue and blocks until it is complete.
@@ -96,8 +97,8 @@ Returns WORKER_THREAD_POOL_ERROR_TIMEOUT if it started the task, but timed out w
 
 Returns WORKER_THREAD_POOL_ERROR on all other errors.
 */
-int worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data, int *callback_result,
-							   uint64_t timeout);
+worker_thread_pool_error worker_thread_pool_enqueue(worker_thread_pool *pool, worker_thread_pool_callback callback, void *data,
+													int *callback_result, uint64_t timeout);
 
 #ifdef __cplusplus
 }
