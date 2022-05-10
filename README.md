@@ -1,5 +1,5 @@
 TODO URI parsing
-https://datatracker.ietf.org/doc/html/rfc3986#section-3.5
+https://datatracker.ietf.org/doc/html/rfc3986
 - URI encode and decode strings
 - URI type that handles the different components
 - when parsing, all components are optional

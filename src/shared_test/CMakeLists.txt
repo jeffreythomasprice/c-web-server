@@ -28,3 +28,7 @@ add_test(NAME test_tcp_socket_wrapper COMMAND test_tcp_socket_wrapper)
 add_executable(test_worker_thread_pool worker_thread_pool.c)
 target_link_libraries(test_worker_thread_pool shared pthread)
 add_test(NAME test_worker_thread_pool COMMAND test_worker_thread_pool)
+
+add_executable(test_uri uri.c)
+target_link_libraries(test_uri shared)
+add_test(NAME test_uri COMMAND test_uri)

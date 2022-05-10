@@ -424,3 +424,23 @@ int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mod
 	size_t diff = a_len - b_len;
 	return diff;
 }
+
+void string_tolower(string *s) {
+	size_t len = string_get_length(s);
+	for (size_t i = 0; i < len; i++) {
+		char c = s->b.data[i];
+		if (c >= 'A' && c <= 'Z') {
+			s->b.data[i] = c - 'A' + 'a';
+		}
+	}
+}
+
+void string_toupper(string *s) {
+	size_t len = string_get_length(s);
+	for (size_t i = 0; i < len; i++) {
+		char c = s->b.data[i];
+		if (c >= 'a' && c <= 'z') {
+			s->b.data[i] = c - 'a' + 'A';
+		}
+	}
+}

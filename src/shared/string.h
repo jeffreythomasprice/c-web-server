@@ -238,6 +238,9 @@ int string_compare_cstr(string *a, char *b, string_compare_mode mode);
  */
 int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mode mode);
 
+void string_tolower(string *s);
+void string_toupper(string *s);
+
 #ifdef __cplusplus
 }
 #endif

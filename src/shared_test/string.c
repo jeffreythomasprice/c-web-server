@@ -255,5 +255,13 @@ int main() {
 	string_dealloc(&s);
 	string_dealloc(&s2);
 
+	string_init_cstr(&s, "fOoBaRbAz");
+	string_tolower(&s);
+	assert(string_compare_cstr(&s, "foobarbaz", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s, "fOoBaRbAz");
+	string_toupper(&s);
+	assert(string_compare_cstr(&s, "FOOBARBAZ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_dealloc(&s);
+
 	return 0;
 }
