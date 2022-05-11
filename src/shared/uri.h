@@ -14,6 +14,10 @@ extern "C" {
 
 typedef struct {
 	string scheme;
+	string authority;
+	string path;
+	string query;
+	string fragment;
 } uri;
 
 void uri_init(uri *u);
