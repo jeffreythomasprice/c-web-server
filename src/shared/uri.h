@@ -15,6 +15,9 @@ extern "C" {
 typedef struct {
 	string scheme;
 	string authority;
+	string userinfo;
+	string host;
+	string port;
 	string path;
 	string query;
 	string fragment;
