@@ -32,6 +32,10 @@ typedef struct {
 	string fragment;
 } uri;
 
+void uri_decode_str(string *dst, string *src);
+void uri_decode_cstr(string *dst, char *src);
+void uri_decode_cstr_len(string *dst, char *src, size_t src_len);
+
 void uri_init(uri *u);
 void uri_dealloc(uri *u);
 
@@ -85,7 +89,7 @@ string *uri_get_query(uri *u);
  */
 string *uri_get_fragment(uri *u);
 
-// TODO JEFF settings for building a uri from parts
+// TODO JEFF setters for building a uri from parts
 // TODO JEFF encode back to string
 
 #ifdef __cplusplus

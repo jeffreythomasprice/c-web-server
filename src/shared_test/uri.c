@@ -15,8 +15,26 @@ void assert_int(char *name, int expected, int actual) {
 	assert(expected == actual);
 }
 
-void test(char *input, char *expected_scheme, char *expected_authority, char *expected_userinfo, char *expected_host,
-		  char *expected_port_str, int expected_port, char *expected_path, char *expected_query, char *expected_fragment) {
+void test_decode() {
+	string s, s2;
+	string_init(&s);
+	string_init(&s2);
+	string_set_cstr(&s, "\%30\%31\%32\%33");
+	uri_decode_str(&s2, &s);
+	assert(!string_compare_cstr(&s2, "0123", STRING_COMPARE_CASE_SENSITIVE));
+	uri_decode_str(&s, &s);
+	assert(!string_compare_cstr(&s, "0123", STRING_COMPARE_CASE_SENSITIVE));
+	uri_decode_cstr(&s, "\%3cfoo\%3e");
+	assert(!string_compare_cstr(&s, "<foo>", STRING_COMPARE_CASE_SENSITIVE));
+	uri_decode_cstr(&s, "\%Fe\%fE\%fe\%FE");
+	char tmp[5] = {0xfe, 0xfe, 0xfe, 0xfe, 0};
+	assert(!string_compare_cstr(&s, tmp, STRING_COMPARE_CASE_SENSITIVE));
+	string_dealloc(&s);
+	string_dealloc(&s2);
+}
+
+void test_parse_pass(char *input, char *expected_scheme, char *expected_authority, char *expected_userinfo, char *expected_host,
+					 char *expected_port_str, int expected_port, char *expected_path, char *expected_query, char *expected_fragment) {
 	uri u;
 	uri_init(&u);
 	log_trace("parsing as uri (expected to succeed): \"%s\"\n", input);
@@ -34,7 +52,7 @@ void test(char *input, char *expected_scheme, char *expected_authority, char *ex
 	log_trace("\n");
 }
 
-void test_fail(char *input) {
+void test_parse_fail(char *input) {
 	uri u;
 	uri_init(&u);
 	log_trace("parsing as uri (expected to fail): \"%s\"\n", input);
@@ -44,43 +62,47 @@ void test_fail(char *input) {
 }
 
 int main(int argc, char **argv) {
+	test_decode();
+
 	// these examples all come from the rfc, see https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2
-	test("ftp://ftp.is.co.za/rfc/rfc1808.txt", "ftp", "ftp.is.co.za", NULL, "ftp.is.co.za", NULL, 0, "/rfc/rfc1808.txt", NULL, NULL);
-	test("http://www.ietf.org/rfc/rfc2396.txt", "http", "www.ietf.org", NULL, "www.ietf.org", NULL, 0, "/rfc/rfc2396.txt", NULL, NULL);
-	test("ldap://[2001:db8::7]/c=GB?objectClass?one", "ldap", "[2001:db8::7]", NULL, "[2001:db8::7]", NULL, 0, "/c=GB", "objectClass?one",
-		 NULL);
-	test("mailto:John.Doe@example.com", "mailto", "John.Doe@example.com", "John.Doe", "example.com", NULL, 0, NULL, NULL, NULL);
-	test("news:comp.infosystems.www.servers.unix", "news", "comp.infosystems.www.servers.unix", NULL, "comp.infosystems.www.servers.unix",
-		 NULL, 0, NULL, NULL, NULL);
-	test("tel:+1-816-555-1212", "tel", "+1-816-555-1212", NULL, "+1-816-555-1212", NULL, 0, NULL, NULL, NULL);
-	test("telnet://192.0.2.16:80/", "telnet", "192.0.2.16:80", NULL, "192.0.2.16", "80", 80, "/", NULL, NULL);
-	test("urn:oasis:names:specification:docbook:dtd:xml:4.1.2", "urn", "oasis:names:specification:docbook:dtd:xml:4.1.2", NULL,
-		 "oasis:names:specification:docbook:dtd:xml:4.1.2", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("ftp://ftp.is.co.za/rfc/rfc1808.txt", "ftp", "ftp.is.co.za", NULL, "ftp.is.co.za", NULL, 0, "/rfc/rfc1808.txt", NULL,
+					NULL);
+	test_parse_pass("http://www.ietf.org/rfc/rfc2396.txt", "http", "www.ietf.org", NULL, "www.ietf.org", NULL, 0, "/rfc/rfc2396.txt", NULL,
+					NULL);
+	test_parse_pass("ldap://[2001:db8::7]/c=GB?objectClass?one", "ldap", "[2001:db8::7]", NULL, "[2001:db8::7]", NULL, 0, "/c=GB",
+					"objectClass?one", NULL);
+	test_parse_pass("mailto:John.Doe@example.com", "mailto", "John.Doe@example.com", "John.Doe", "example.com", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("news:comp.infosystems.www.servers.unix", "news", "comp.infosystems.www.servers.unix", NULL,
+					"comp.infosystems.www.servers.unix", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("tel:+1-816-555-1212", "tel", "+1-816-555-1212", NULL, "+1-816-555-1212", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("telnet://192.0.2.16:80/", "telnet", "192.0.2.16:80", NULL, "192.0.2.16", "80", 80, "/", NULL, NULL);
+	test_parse_pass("urn:oasis:names:specification:docbook:dtd:xml:4.1.2", "urn", "oasis:names:specification:docbook:dtd:xml:4.1.2", NULL,
+					"oasis:names:specification:docbook:dtd:xml:4.1.2", NULL, 0, NULL, NULL, NULL);
 
 	// examples missing scheme and authority
-	test("/", NULL, NULL, NULL, NULL, NULL, 0, "/", NULL, NULL);
-	test("a", NULL, "a", NULL, "a", NULL, 0, NULL, NULL, NULL);
-	test("/a", NULL, NULL, NULL, NULL, NULL, 0, "/a", NULL, NULL);
-	test("/foo/bar", NULL, NULL, NULL, NULL, NULL, 0, "/foo/bar", NULL, NULL);
-	test("/foo?ab=cd", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab=cd", NULL);
-	test("/foo?ab=cd&ef=123", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab=cd&ef=123", NULL);
-	test("/foo#/asdf/qwer", NULL, NULL, NULL, NULL, NULL, 0, "/foo", NULL, "/asdf/qwer");
-	test("/foo?ab#cd", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab", "cd");
-	test("?_", NULL, NULL, NULL, NULL, NULL, 0, NULL, "_", NULL);
-	test("?blah", NULL, NULL, NULL, NULL, NULL, 0, NULL, "blah", NULL);
-	test("#asdf", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, "asdf");
-	test("#a", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, "a");
+	test_parse_pass("/", NULL, NULL, NULL, NULL, NULL, 0, "/", NULL, NULL);
+	test_parse_pass("a", NULL, "a", NULL, "a", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("/a", NULL, NULL, NULL, NULL, NULL, 0, "/a", NULL, NULL);
+	test_parse_pass("/foo/bar", NULL, NULL, NULL, NULL, NULL, 0, "/foo/bar", NULL, NULL);
+	test_parse_pass("/foo?ab=cd", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab=cd", NULL);
+	test_parse_pass("/foo?ab=cd&ef=123", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab=cd&ef=123", NULL);
+	test_parse_pass("/foo#/asdf/qwer", NULL, NULL, NULL, NULL, NULL, 0, "/foo", NULL, "/asdf/qwer");
+	test_parse_pass("/foo?ab#cd", NULL, NULL, NULL, NULL, NULL, 0, "/foo", "ab", "cd");
+	test_parse_pass("?_", NULL, NULL, NULL, NULL, NULL, 0, NULL, "_", NULL);
+	test_parse_pass("?blah", NULL, NULL, NULL, NULL, NULL, 0, NULL, "blah", NULL);
+	test_parse_pass("#asdf", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, "asdf");
+	test_parse_pass("#a", NULL, NULL, NULL, NULL, NULL, 0, NULL, NULL, "a");
 
 	// negative tests
-	test_fail("");
-	test_fail("    ");
-	test_fail("?");
-	test_fail("#");
+	test_parse_fail("");
+	test_parse_fail("    ");
+	test_parse_fail("?");
+	test_parse_fail("#");
 
 	// decode URI components
-	test("/foo\%20bar", NULL, NULL, NULL, NULL, NULL, 0, "/foo bar", NULL, NULL);
-	test("/%F0%9F%98%80", NULL, NULL, NULL, NULL, NULL, 0, "/😀", NULL, NULL);
-	test("/%f0%9f%99%83%f0%9f%99%83%f0%9f%99%83", NULL, NULL, NULL, NULL, NULL, 0, "/🙃🙃🙃", NULL, NULL);
+	test_parse_pass("/foo\%20bar?baz\%20asdf#widget\%20wadget", NULL, NULL, NULL, NULL, NULL, 0, "/foo bar", "baz asdf", "widget wadget");
+	test_parse_pass("/%F0%9F%98%80", NULL, NULL, NULL, NULL, NULL, 0, "/😀", NULL, NULL);
+	test_parse_pass("/%f0%9f%99%83%f0%9f%99%83%f0%9f%99%83", NULL, NULL, NULL, NULL, NULL, 0, "/🙃🙃🙃", NULL, NULL);
 
 	return 0;
 }

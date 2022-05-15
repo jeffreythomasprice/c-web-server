@@ -32,6 +32,9 @@
 		"new": "c",
 		"stdexcept": "c",
 		"signal.h": "c",
-		"inet.h": "c"
+		"inet.h": "c",
+		"algorithm": "c",
+		"memory": "c",
+		"numeric": "c"
 	}
 }

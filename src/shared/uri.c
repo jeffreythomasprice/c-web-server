@@ -4,6 +4,65 @@
 #include <stdio.h>
 #include <string.h>
 
+void uri_decode_str(string *dst, string *src) {
+	uri_decode_cstr_len(dst, string_get_cstr(src), string_get_length(src));
+}
+
+void uri_decode_cstr(string *dst, char *src) {
+	uri_decode_cstr_len(dst, src, strlen(src));
+}
+
+void uri_decode_cstr_len(string *dst, char *src, size_t src_len) {
+	// src might be a pointer to a region within dst
+	// in case they're totally separate, allocate enough space to hold the result in dst
+	// if src comes from this string, the capacity of the underlying buffer shouldn't shrink, so there should be no way we lose data
+	string_set_length(dst, src_len, 0);
+	char *dst_ptr = string_get_cstr(dst);
+	char *src_ptr = src;
+	for (size_t i = 0; i < src_len; i++, dst_ptr++, src_ptr++) {
+		if (*src_ptr == '%') {
+			if (i + 2 >= src_len) {
+				goto not_escaped;
+			}
+			int high, low;
+			high = src_ptr[1];
+			low = src_ptr[2];
+			if (high >= '0' && high <= '9') {
+				high -= '0';
+			} else if (high >= 'a' && high <= 'f') {
+				high -= 'a';
+				high += 10;
+			} else if (high >= 'A' && high <= 'F') {
+				high -= 'A';
+				high += 10;
+			} else {
+				goto not_escaped;
+			}
+			if (low >= '0' && low <= '9') {
+				low -= '0';
+			} else if (low >= 'a' && low <= 'f') {
+				low -= 'a';
+				low += 10;
+			} else if (low >= 'A' && low <= 'F') {
+				low -= 'A';
+				low += 10;
+			} else {
+				goto not_escaped;
+			}
+			*dst_ptr = (high << 4) | low;
+			i += 2;
+			src_ptr += 2;
+			continue;
+		}
+	not_escaped:
+		*dst_ptr = *src_ptr;
+	}
+	// reset the length of the string to the new known size
+	// this should be either doing nothing or shrinking it depending on whether we had any escaped characters
+	string_set_length(dst, dst_ptr - string_get_cstr(dst), 0);
+	for (size_t i = 0; i < string_get_length(dst); i++) {}
+}
+
 void uri_init(uri *u) {
 	u->has_scheme = 0;
 	string_init(&u->scheme);
@@ -48,8 +107,6 @@ int uri_parse_cstr(uri *u, char *input) {
 }
 
 int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
-	// TODO JEFF various peices of this should be url decoded
-
 	u->has_scheme = 0;
 	string_clear(&u->scheme);
 	u->has_authority = 0;
@@ -194,6 +251,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		if (len >= 1) {
 			u->has_path = 1;
 			string_set_cstr_len(&u->path, input + start, len);
+			uri_decode_str(&u->path, &u->path);
 		}
 	}
 
@@ -214,6 +272,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		if (len >= 1) {
 			u->has_query = 1;
 			string_set_cstr_len(&u->query, input + start, len);
+			uri_decode_str(&u->query, &u->query);
 		}
 	}
 
@@ -228,6 +287,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		if (len >= 1) {
 			u->has_fragment = 1;
 			string_set_cstr_len(&u->fragment, input + start, len);
+			uri_decode_str(&u->fragment, &u->fragment);
 		}
 	}
 
