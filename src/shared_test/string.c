@@ -4,7 +4,7 @@
 #include "../shared/string.h"
 
 int main() {
-	string s, s2;
+	string s, s2, s3;
 
 	string_init(&s);
 	assert(string_get_length(&s) == 0);
@@ -14,6 +14,24 @@ int main() {
 	string_init_cstr(&s, "Hello, World!");
 	assert(string_get_length(&s) == 13);
 	assert(!strcmp(string_get_cstr(&s), "Hello, World!"));
+	string_dealloc(&s);
+
+	string_init(&s);
+	string_set_length(&s, 5, '*');
+	assert(string_get_length(&s) == 5);
+	assert(!strcmp(string_get_cstr(&s), "*****"));
+	string_set_length(&s, 4, '_');
+	assert(string_get_length(&s) == 4);
+	assert(!strcmp(string_get_cstr(&s), "****"));
+	string_set_length(&s, 8, '~');
+	assert(string_get_length(&s) == 8);
+	assert(!strcmp(string_get_cstr(&s), "****~~~~"));
+	string_set_length(&s, 10, '_');
+	assert(string_get_length(&s) == 10);
+	assert(!strcmp(string_get_cstr(&s), "****~~~~__"));
+	string_set_length(&s, 7, '&');
+	assert(string_get_length(&s) == 7);
+	assert(!strcmp(string_get_cstr(&s), "****~~~"));
 	string_dealloc(&s);
 
 	string_init_cstr_len(&s, "abcdefghijklmnopqrstuvwxyz", 20);
@@ -112,9 +130,13 @@ int main() {
 
 	string_clear(&s2);
 	string_append_substr(&s2, &s, 8, 11);
+	assert(!strcmp(string_get_cstr(&s2), "geh"));
 	string_append_substr(&s2, &s, 4, 7);
+	assert(!strcmp(string_get_cstr(&s2), "gehdef"));
 	string_append_substr(&s2, &s, 0, 3);
+	assert(!strcmp(string_get_cstr(&s2), "gehdefabc"));
 	string_append_substr(&s2, &s, 5, 25);
+	assert(!strcmp(string_get_cstr(&s2), "gehdefabcef geh"));
 	string_append_substr(&s2, &s, 75, 0);
 	string_append_substr(&s2, &s, 75, 80);
 	assert(!strcmp(string_get_cstr(&s2), "gehdefabcef geh"));
@@ -256,12 +278,72 @@ int main() {
 	string_dealloc(&s2);
 
 	string_init_cstr(&s, "fOoBaRbAz");
-	string_tolower(&s);
+	string_init(&s2);
+	string_tolower(&s, &s);
 	assert(string_compare_cstr(&s, "foobarbaz", STRING_COMPARE_CASE_SENSITIVE) == 0);
 	string_set_cstr(&s, "fOoBaRbAz");
-	string_toupper(&s);
+	string_toupper(&s, &s);
 	assert(string_compare_cstr(&s, "FOOBARBAZ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s, "fOoBaRbAz");
+	string_set_cstr(&s2, "fffffffff");
+	string_tolower(&s2, &s);
+	assert(string_compare_cstr(&s, "fOoBaRbAz", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	assert(string_compare_cstr(&s2, "foobarbaz", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s, "fOoBaRbAz");
+	string_set_cstr(&s2, "fffffffff");
+	string_toupper(&s2, &s);
+	assert(string_compare_cstr(&s, "fOoBaRbAz", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	assert(string_compare_cstr(&s2, "FOOBARBAZ", STRING_COMPARE_CASE_SENSITIVE) == 0);
 	string_dealloc(&s);
+	string_dealloc(&s2);
+
+	string_init_cstr(&s, "  \tfoobar \t  ");
+	string_init(&s2);
+	string_init(&s3);
+	string_trim_start_char(&s2, &s, ' ');
+	assert(string_compare_cstr(&s2, "\tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_start_char(&s2, &s, 'X');
+	assert(string_compare_cstr(&s2, "  \tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_end_char(&s2, &s, ' ');
+	assert(string_compare_cstr(&s2, "  \tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_end_char(&s2, &s, 'X');
+	assert(string_compare_cstr(&s2, "  \tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_char(&s2, &s, ' ');
+	assert(string_compare_cstr(&s2, "\tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_char(&s2, &s, 'X');
+	assert(string_compare_cstr(&s2, "  \tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, " \t");
+	string_trim_start_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "foobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, "X ");
+	string_trim_start_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "\tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, " \t");
+	string_trim_end_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "  \tfoobar", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, "X ");
+	string_trim_end_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "  \tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, " \t");
+	string_trim_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "foobar", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_set_cstr(&s3, "X ");
+	string_trim_any_of_str(&s2, &s, &s3);
+	assert(string_compare_cstr(&s2, "\tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_start_any_of_cstr(&s2, &s, " \t");
+	assert(string_compare_cstr(&s2, "foobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_start_any_of_cstr(&s2, &s, "X ");
+	assert(string_compare_cstr(&s2, "\tfoobar \t  ", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_end_any_of_cstr(&s2, &s, " \t");
+	assert(string_compare_cstr(&s2, "  \tfoobar", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_end_any_of_cstr(&s2, &s, "X ");
+	assert(string_compare_cstr(&s2, "  \tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_any_of_cstr(&s2, &s, " \t");
+	assert(string_compare_cstr(&s2, "foobar", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_trim_any_of_cstr(&s2, &s, "X ");
+	assert(string_compare_cstr(&s2, "\tfoobar \t", STRING_COMPARE_CASE_SENSITIVE) == 0);
+	string_dealloc(&s);
+	string_dealloc(&s2);
 
 	return 0;
 }

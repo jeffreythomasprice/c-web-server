@@ -85,7 +85,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 				u->has_scheme = 1;
 				string_init_cstr_len(&u->scheme, input, i);
 				i++;
-				string_tolower(&u->scheme);
+				string_tolower(&u->scheme, &u->scheme);
 				break;
 			}
 		}
@@ -119,6 +119,10 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 	if (user_info_separator != -1 && port_separator != -1 && port_separator < user_info_separator) {
 		port_separator = -1;
 	}
+	// special case for where there is no host data but there is a port separator
+	if (port_separator == 0 || (user_info_separator != -1 && port_separator == user_info_separator + 1)) {
+		port_separator = -1;
+	}
 	size_t authority_len = i - authority_start;
 	if (authority_len > 0) {
 		u->has_authority = 1;
@@ -147,11 +151,18 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		}
 		u->has_host = 1;
 		string_set_cstr_len(&u->host, input + host_start, host_end - host_start);
-		string_tolower(&u->host);
+		string_tolower(&u->host, &u->host);
+
+		// degenerate case, bad host
+		string_trim_any_of_cstr(&u->host, &u->host, " \t");
+		if (string_get_length(&u->host) == 0) {
+			u->has_host = 0;
+			string_clear(&u->host);
+		}
 
 		// port
 		// https://datatracker.ietf.org/doc/html/rfc3986#section-3.2.3
-		if (port_separator != -1 && i - port_separator >= 1) {
+		if (u->has_host && port_separator != -1 && i - port_separator >= 1) {
 			string_set_cstr_len(&u->port_str, input + port_separator + 1, i - port_separator - 1);
 			int n;
 			if (sscanf(string_get_cstr(&u->port_str), "%i%n", &u->port, &n) == 1 && u->port >= 0 && u->port < 65536 &&
@@ -160,7 +171,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 			} else {
 				host_end = i;
 				string_set_cstr_len(&u->host, input + host_start, host_end - host_start);
-				string_tolower(&u->host);
+				string_tolower(&u->host, &u->host);
 				string_clear(&u->port_str);
 				u->port = 0;
 			}
@@ -221,7 +232,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 	}
 
 	// fail if we didn't parse anything
-	if (!u->has_scheme && !u->has_authority && !u->has_path && !u->has_query && !u->has_fragment) {
+	if (!u->has_scheme && !u->has_host && !u->has_path && !u->has_query && !u->has_fragment) {
 		return 1;
 	}
 	// fail if there were extra characters in the input

@@ -73,10 +73,14 @@ int main(int argc, char **argv) {
 
 	// negative tests
 	test_fail("");
-	// TODO JEFF all whitespace test segfaults?
 	test_fail("    ");
 	test_fail("?");
 	test_fail("#");
+
+	// decode URI components
+	test("/foo\%20bar", NULL, NULL, NULL, NULL, NULL, 0, "/foo bar", NULL, NULL);
+	test("/%F0%9F%98%80", NULL, NULL, NULL, NULL, NULL, 0, "/😀", NULL, NULL);
+	test("/%f0%9f%99%83%f0%9f%99%83%f0%9f%99%83", NULL, NULL, NULL, NULL, NULL, 0, "/🙃🙃🙃", NULL, NULL);
 
 	return 0;
 }

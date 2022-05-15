@@ -32,6 +32,15 @@ size_t string_get_length(string *s) {
 	return s->b.length - 1;
 }
 
+void string_set_length(string *s, size_t new_len, char fill) {
+	size_t old_len = string_get_length(s);
+	buffer_set_length(&s->b, new_len + 1);
+	for (size_t i = old_len; i < new_len; i++) {
+		s->b.data[i] = fill;
+	}
+	s->b.data[new_len] = 0;
+}
+
 char *string_get_cstr(string *s) {
 	return s->b.data;
 }
@@ -425,22 +434,111 @@ int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mod
 	return diff;
 }
 
-void string_tolower(string *s) {
-	size_t len = string_get_length(s);
-	for (size_t i = 0; i < len; i++) {
-		char c = s->b.data[i];
+void string_tolower(string *dst, string *src) {
+	size_t len = string_get_length(src);
+	if (dst != src) {
+		string_set_length(dst, len, 0);
+	}
+	char *dst_ptr = dst->b.data;
+	char *src_ptr = src->b.data;
+	for (size_t i = 0; i < len; i++, dst_ptr++, src_ptr++) {
+		char c = *src_ptr;
 		if (c >= 'A' && c <= 'Z') {
-			s->b.data[i] = c - 'A' + 'a';
+			*dst_ptr = c - 'A' + 'a';
+		} else {
+			*dst_ptr = c;
 		}
 	}
 }
 
-void string_toupper(string *s) {
-	size_t len = string_get_length(s);
-	for (size_t i = 0; i < len; i++) {
-		char c = s->b.data[i];
+void string_toupper(string *dst, string *src) {
+	size_t len = string_get_length(src);
+	if (dst != src) {
+		string_set_length(dst, len, 0);
+	}
+	char *dst_ptr = dst->b.data;
+	char *src_ptr = src->b.data;
+	for (size_t i = 0; i < len; i++, dst_ptr++, src_ptr++) {
+		char c = *src_ptr;
 		if (c >= 'a' && c <= 'z') {
-			s->b.data[i] = c - 'a' + 'A';
+			*dst_ptr = c - 'a' + 'A';
+		} else {
+			*dst_ptr = c;
 		}
 	}
+}
+
+void string_trim_start_char(string *dst, string *src, char find) {
+	char find_cstr[2];
+	find_cstr[0] = find;
+	find_cstr[1] = 0;
+	size_t i = string_index_not_of_any_cstr(src, find_cstr, 0);
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, i, string_get_length(src));
+	}
+}
+
+void string_trim_start_any_of_str(string *dst, string *src, string *find) {
+	size_t i = string_index_not_of_any_str(src, find, 0);
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, i, string_get_length(src));
+	}
+}
+
+void string_trim_start_any_of_cstr(string *dst, string *src, char *find) {
+	size_t i = string_index_not_of_any_cstr(src, find, 0);
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, i, string_get_length(src));
+	}
+}
+
+void string_trim_end_char(string *dst, string *src, char find) {
+	char find_cstr[2];
+	find_cstr[0] = find;
+	find_cstr[1] = 0;
+	size_t i = string_reverse_index_not_of_any_cstr(src, find_cstr, string_get_length(src));
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, 0, i + 1);
+	}
+}
+
+void string_trim_end_any_of_str(string *dst, string *src, string *find) {
+	size_t i = string_reverse_index_not_of_any_str(src, find, string_get_length(src));
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, 0, i + 1);
+	}
+}
+
+void string_trim_end_any_of_cstr(string *dst, string *src, char *find) {
+	size_t i = string_reverse_index_not_of_any_cstr(src, find, string_get_length(src));
+	if (i == -1) {
+		string_clear(dst);
+	} else {
+		string_set_substr(dst, src, 0, i + 1);
+	}
+}
+
+void string_trim_char(string *dst, string *src, char find) {
+	string_trim_start_char(dst, src, find);
+	string_trim_end_char(dst, dst, find);
+}
+
+void string_trim_any_of_str(string *dst, string *src, string *find) {
+	string_trim_start_any_of_str(dst, src, find);
+	string_trim_end_any_of_str(dst, dst, find);
+}
+
+void string_trim_any_of_cstr(string *dst, string *src, char *find) {
+	string_trim_start_any_of_cstr(dst, src, find);
+	string_trim_end_any_of_cstr(dst, dst, find);
 }

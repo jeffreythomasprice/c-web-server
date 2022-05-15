@@ -301,14 +301,10 @@ int http_request_parse(http_request *request, stream *stream) {
 														  split_results[1] - split_results[0],
 														  // create this header if missing
 														  1);
+
 							// scratch is now the value with any leading whitespace trimmed off
-							size_t start_of_value = split_results[2];
-							size_t first_non_whitespace = string_index_not_of_any_cstr(&request->scratch, " \t", start_of_value);
-							if (first_non_whitespace >= 0) {
-								start_of_value = first_non_whitespace;
-							}
-							string_set_cstr_len(&request->scratch, string_get_cstr(&request->scratch) + start_of_value,
-												split_results[3] - start_of_value);
+							string_set_substr(&request->scratch, &request->scratch, split_results[2], -1);
+							string_trim_start_any_of_cstr(&request->scratch, &request->scratch, " \t");
 							// split off the first value by looking for a comma
 							size_t num_value_splits = string_split(&request->scratch, 0, ",", split_results, 2, 2);
 							while (1) {

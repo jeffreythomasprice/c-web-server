@@ -22,6 +22,10 @@ void string_init_cstr_len(string *s, char *c, size_t len);
 void string_dealloc(string *s);
 
 size_t string_get_length(string *s);
+/**
+ * Changes the length of this string. If the new length is bigger new characters are filled with fill.
+ */
+void string_set_length(string *s, size_t new_len, char fill);
 char *string_get_cstr(string *s);
 
 /**
@@ -238,8 +242,53 @@ int string_compare_cstr(string *a, char *b, string_compare_mode mode);
  */
 int string_compare_cstr_len(string *a, char *b, size_t b_len, string_compare_mode mode);
 
-void string_tolower(string *s);
-void string_toupper(string *s);
+/**
+ * Converts all characters in src to lower case and sets dst to the result. Source and destination may be the same.
+ */
+void string_tolower(string *dst, string *src);
+/**
+ * Converts all characters in src to upper case and sets dst to the result. Source and destination may be the same.
+ */
+void string_toupper(string *dst, string *src);
+
+/**
+ * Removes all instances of find from the start of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_start_char(string *dst, string *src, char find);
+/**
+ * Removes all instances of any character in find from the start of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_start_any_of_str(string *dst, string *src, string *find);
+/**
+ * Removes all instances of any character in find from the start of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_start_any_of_cstr(string *dst, string *src, char *find);
+/**
+ * Removes all instances of find from the end of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_end_char(string *dst, string *src, char find);
+/**
+ * Removes all instances of any character in find from the end of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_end_any_of_str(string *dst, string *src, string *find);
+/**
+ * Removes all instances of any character in find from the end of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_end_any_of_cstr(string *dst, string *src, char *find);
+/**
+ * Removes all instances of find from the start and end of src and sets dst to the result. Source and destination may be the same.
+ */
+void string_trim_char(string *dst, string *src, char find);
+/**
+ * Removes all instances of any character in find from the start and end of src and sets dst to the result. Source and destination may be
+ * the same.
+ */
+void string_trim_any_of_str(string *dst, string *src, string *find);
+/**
+ * Removes all instances of any character in find from the start and end of src and sets dst to the result. Source and destination may be
+ * the same.
+ */
+void string_trim_any_of_cstr(string *dst, string *src, char *find);
 
 #ifdef __cplusplus
 }
