@@ -35,6 +35,7 @@ typedef struct {
 	buffer read_buf;
 	string scratch;
 	string method;
+	// TODO uri should be the uri type
 	string uri;
 	http_headers headers;
 	// TODO body of request should be a stream, not fetch all data up front

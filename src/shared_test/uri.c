@@ -65,18 +65,18 @@ int main(int argc, char **argv) {
 	test_decode();
 
 	// these examples all come from the rfc, see https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2
-	test_parse_pass("ftp://ftp.is.co.za/rfc/rfc1808.txt", "ftp", "ftp.is.co.za", NULL, "ftp.is.co.za", NULL, 0, "/rfc/rfc1808.txt", NULL,
+	test_parse_pass("ftp://ftp.is.co.za/rfc/rfc1808.txt", "ftp://", "ftp.is.co.za", NULL, "ftp.is.co.za", NULL, 0, "/rfc/rfc1808.txt", NULL,
 					NULL);
-	test_parse_pass("http://www.ietf.org/rfc/rfc2396.txt", "http", "www.ietf.org", NULL, "www.ietf.org", NULL, 0, "/rfc/rfc2396.txt", NULL,
-					NULL);
-	test_parse_pass("ldap://[2001:db8::7]/c=GB?objectClass?one", "ldap", "[2001:db8::7]", NULL, "[2001:db8::7]", NULL, 0, "/c=GB",
+	test_parse_pass("http://www.ietf.org/rfc/rfc2396.txt", "http://", "www.ietf.org", NULL, "www.ietf.org", NULL, 0, "/rfc/rfc2396.txt",
+					NULL, NULL);
+	test_parse_pass("ldap://[2001:db8::7]/c=GB?objectClass?one", "ldap://", "[2001:db8::7]", NULL, "[2001:db8::7]", NULL, 0, "/c=GB",
 					"objectClass?one", NULL);
-	test_parse_pass("mailto:John.Doe@example.com", "mailto", "John.Doe@example.com", "John.Doe", "example.com", NULL, 0, NULL, NULL, NULL);
-	test_parse_pass("news:comp.infosystems.www.servers.unix", "news", "comp.infosystems.www.servers.unix", NULL,
+	test_parse_pass("mailto:John.Doe@example.com", "mailto:", "John.Doe@example.com", "John.Doe", "example.com", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("news:comp.infosystems.www.servers.unix", "news:", "comp.infosystems.www.servers.unix", NULL,
 					"comp.infosystems.www.servers.unix", NULL, 0, NULL, NULL, NULL);
-	test_parse_pass("tel:+1-816-555-1212", "tel", "+1-816-555-1212", NULL, "+1-816-555-1212", NULL, 0, NULL, NULL, NULL);
-	test_parse_pass("telnet://192.0.2.16:80/", "telnet", "192.0.2.16:80", NULL, "192.0.2.16", "80", 80, "/", NULL, NULL);
-	test_parse_pass("urn:oasis:names:specification:docbook:dtd:xml:4.1.2", "urn", "oasis:names:specification:docbook:dtd:xml:4.1.2", NULL,
+	test_parse_pass("tel:+1-816-555-1212", "tel:", "+1-816-555-1212", NULL, "+1-816-555-1212", NULL, 0, NULL, NULL, NULL);
+	test_parse_pass("telnet://192.0.2.16:80/", "telnet://", "192.0.2.16:80", NULL, "192.0.2.16", "80", 80, "/", NULL, NULL);
+	test_parse_pass("urn:oasis:names:specification:docbook:dtd:xml:4.1.2", "urn:", "oasis:names:specification:docbook:dtd:xml:4.1.2", NULL,
 					"oasis:names:specification:docbook:dtd:xml:4.1.2", NULL, 0, NULL, NULL, NULL);
 
 	// examples missing scheme and authority

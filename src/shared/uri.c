@@ -139,12 +139,18 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 			// but several examples show a schema and authority spearated by only ":"
 			// e.g. mailto:John.Doe@example.com
 			if (c == ':') {
+				i++;
+				// we might have a "://" separator
+				if (i + 2 <= input_length && input[i] == '/' && input[i + 1] == '/') {
+					i += 2;
+				}
 				u->has_scheme = 1;
 				string_init_cstr_len(&u->scheme, input, i);
-				i++;
 				string_tolower(&u->scheme, &u->scheme);
 				break;
 			}
+			// unrecognized character, and we didn't hit our separator so we don't have a scheme
+			break;
 		}
 		if (!u->has_scheme) {
 			i = 0;
