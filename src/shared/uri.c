@@ -14,7 +14,6 @@ void uri_decode_cstr(string *dst, char *src) {
 
 void uri_decode_cstr_len(string *dst, char *src, size_t src_len) {
 	// src might be a pointer to a region within dst
-	// in case they're totally separate, allocate enough space to hold the result in dst
 	// if src comes from this string, the capacity of the underlying buffer shouldn't shrink, so there should be no way we lose data
 	string_set_length(dst, src_len, 0);
 	char *dst_ptr = string_get_cstr(dst);
@@ -61,6 +60,23 @@ void uri_decode_cstr_len(string *dst, char *src, size_t src_len) {
 	// this should be either doing nothing or shrinking it depending on whether we had any escaped characters
 	string_set_length(dst, dst_ptr - string_get_cstr(dst), 0);
 	for (size_t i = 0; i < string_get_length(dst); i++) {}
+}
+
+void uri_encode_str(string *dst, string *src) {
+	uri_encode_cstr_len(dst, string_get_cstr(src), string_get_length(src));
+}
+
+void uri_encode_cstr(string *dst, char *src) {
+	uri_encode_cstr_len(dst, src, strlen(src));
+}
+
+void uri_encode_cstr_len(string *dst, char *src, size_t src_len) {
+	/*
+	TODO JEFF implement uri_encode_cstr_len
+
+	from the rfc
+	unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+	*/
 }
 
 void uri_init(uri *u) {
@@ -370,4 +386,34 @@ string *uri_get_fragment(uri *u) {
 		return &u->fragment;
 	}
 	return NULL;
+}
+
+void uri_append_to_string(uri *u, string *s) {
+	if (u->has_scheme) {
+		string_append_str(s, &u->scheme);
+	}
+	if (u->has_userinfo) {
+		string_append_str(s, &u->userinfo);
+		string_append_cstr(s, "@");
+	}
+	if (u->has_host) {
+		string_append_str(s, &u->host);
+	}
+	if (u->has_port) {
+		string_append_cstrf(s, ":%d", u->port);
+	}
+	if (u->has_path) {
+		// TODO JEFF encode
+		string_append_str(s, &u->path);
+	}
+	if (u->has_query) {
+		// TODO JEFF encode
+		string_append_cstr(s, "?");
+		string_append_str(s, &u->query);
+	}
+	if (u->has_fragment) {
+		// TODO JEFF encode
+		string_append_cstr(s, "#");
+		string_append_str(s, &u->fragment);
+	}
 }

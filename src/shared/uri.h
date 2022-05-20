@@ -15,6 +15,7 @@ extern "C" {
 typedef struct {
 	int has_scheme;
 	string scheme;
+	// TODO is authority even needed?
 	int has_authority;
 	string authority;
 	int has_userinfo;
@@ -36,7 +37,9 @@ void uri_decode_str(string *dst, string *src);
 void uri_decode_cstr(string *dst, char *src);
 void uri_decode_cstr_len(string *dst, char *src, size_t src_len);
 
-// TODO uri_encode
+void uri_encode_str(string *dst, string *src);
+void uri_encode_cstr(string *dst, char *src);
+void uri_encode_cstr_len(string *dst, char *src, size_t src_len);
 
 void uri_init(uri *u);
 void uri_dealloc(uri *u);
@@ -91,8 +94,10 @@ string *uri_get_query(uri *u);
  */
 string *uri_get_fragment(uri *u);
 
-// TODO uri setters to help build one from parts
-// TODO uri to string with encoding
+/**
+ * Appends the uri to the string, encoding components as needed.
+ */
+void uri_append_to_string(uri *u, string *s);
 
 #ifdef __cplusplus
 }

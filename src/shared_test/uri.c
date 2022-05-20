@@ -33,11 +33,28 @@ void test_decode() {
 	string_dealloc(&s2);
 }
 
+void test_encode() {
+	string s, s2;
+	string_init(&s);
+	string_init(&s2);
+	string_set_cstr(&s, "foo bar baz");
+	uri_encode_str(&s2, &s);
+	assert(!string_compare_cstr(&s2, "foo\%20bar\%20baz", STRING_COMPARE_CASE_SENSITIVE));
+	uri_encode_str(&s, &s);
+	assert(!string_compare_cstr(&s, "foo\%20bar\%20baz", STRING_COMPARE_CASE_SENSITIVE));
+	uri_encode_cstr(&s, "\t\tasdf  ");
+	assert(!string_compare_cstr(&s, "\%09\%09asdf\%20\%20", STRING_COMPARE_CASE_SENSITIVE));
+	string_dealloc(&s);
+	string_dealloc(&s2);
+}
+
 void test_parse_pass(char *input, char *expected_scheme, char *expected_authority, char *expected_userinfo, char *expected_host,
 					 char *expected_port_str, int expected_port, char *expected_path, char *expected_query, char *expected_fragment) {
 	uri u;
 	uri_init(&u);
+
 	log_trace("parsing as uri (expected to succeed): \"%s\"\n", input);
+
 	assert(!uri_parse_cstr(&u, input));
 	assert_cstr_str("scheme", expected_scheme, uri_get_scheme(&u));
 	assert_cstr_str("authority", expected_authority, uri_get_authority(&u));
@@ -48,7 +65,15 @@ void test_parse_pass(char *input, char *expected_scheme, char *expected_authorit
 	assert_cstr_str("path", expected_path, uri_get_path(&u));
 	assert_cstr_str("query", expected_query, uri_get_query(&u));
 	assert_cstr_str("fragment", expected_fragment, uri_get_fragment(&u));
+
+	string s;
+	string_init(&s);
+	uri_append_to_string(&u, &s);
+	assert_cstr_str("re-created original string", input, &s);
+	string_dealloc(&s);
+
 	uri_dealloc(&u);
+
 	log_trace("\n");
 }
 
@@ -63,6 +88,7 @@ void test_parse_fail(char *input) {
 
 int main(int argc, char **argv) {
 	test_decode();
+	test_encode();
 
 	// these examples all come from the rfc, see https://datatracker.ietf.org/doc/html/rfc3986#section-1.1.2
 	test_parse_pass("ftp://ftp.is.co.za/rfc/rfc1808.txt", "ftp://", "ftp.is.co.za", NULL, "ftp.is.co.za", NULL, 0, "/rfc/rfc1808.txt", NULL,
