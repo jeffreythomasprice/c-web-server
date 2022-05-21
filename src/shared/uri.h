@@ -33,13 +33,31 @@ typedef struct {
 	string fragment;
 } uri;
 
-void uri_decode_str(string *dst, string *src);
-void uri_decode_cstr(string *dst, char *src);
-void uri_decode_cstr_len(string *dst, char *src, size_t src_len);
+/**
+ * Appends the contents of src to dst, replacing escaped characters with their actual values.
+ */
+void uri_append_decoded_str(string *dst, string *src);
+/**
+ * Appends the contents of src to dst, replacing escaped characters with their actual values.
+ */
+void uri_append_decoded_cstr(string *dst, char *src);
+/**
+ * Appends the contents of src to dst, replacing escaped characters with their actual values.
+ */
+void uri_append_decoded_cstr_len(string *dst, char *src, size_t src_len);
 
-void uri_encode_str(string *dst, string *src);
-void uri_encode_cstr(string *dst, char *src);
-void uri_encode_cstr_len(string *dst, char *src, size_t src_len);
+/**
+ * Appends the contents of src to dst, escaping any characters not in the URI unreserved characters list.
+ */
+void uri_append_encoded_str(string *dst, string *src);
+/**
+ * Appends the contents of src to dst, escaping any characters not in the URI unreserved characters list.
+ */
+void uri_append_encoded_cstr(string *dst, char *src);
+/**
+ * Appends the contents of src to dst, escaping any characters not in the URI unreserved characters list.
+ */
+void uri_append_encoded_cstr_len(string *dst, char *src, size_t src_len);
 
 void uri_init(uri *u);
 void uri_dealloc(uri *u);

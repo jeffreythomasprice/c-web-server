@@ -4,28 +4,36 @@
 #include <stdio.h>
 #include <string.h>
 
-void uri_decode_str(string *dst, string *src) {
-	uri_decode_cstr_len(dst, string_get_cstr(src), string_get_length(src));
+void uri_append_decoded_str(string *dst, string *src) {
+	uri_append_decoded_cstr_len(dst, string_get_cstr(src), string_get_length(src));
 }
 
-void uri_decode_cstr(string *dst, char *src) {
-	uri_decode_cstr_len(dst, src, strlen(src));
+void uri_append_decoded_cstr(string *dst, char *src) {
+	uri_append_decoded_cstr_len(dst, src, strlen(src));
 }
 
-void uri_decode_cstr_len(string *dst, char *src, size_t src_len) {
-	// src might be a pointer to a region within dst
-	// if src comes from this string, the capacity of the underlying buffer shouldn't shrink, so there should be no way we lose data
-	string_set_length(dst, src_len, 0);
-	char *dst_ptr = string_get_cstr(dst);
-	char *src_ptr = src;
-	for (size_t i = 0; i < src_len; i++, dst_ptr++, src_ptr++) {
-		if (*src_ptr == '%') {
+void uri_append_decoded_cstr_len(string *dst, char *src, size_t src_len) {
+	// TODO JEFF reserve size in dst ahead of time
+
+	// if src is a substring in dst we have to copy it, otherwise a future realloc might move this pointer
+	string temp;
+	int should_dealloc_temp;
+	if (src >= string_get_cstr(dst) && src < string_get_cstr(dst) + string_get_length(dst)) {
+		string_init_cstr_len(&temp, src, src_len);
+		should_dealloc_temp = 1;
+		src = string_get_cstr(&temp);
+	} else {
+		should_dealloc_temp = 0;
+	}
+
+	for (size_t i = 0; i < src_len; i++, src++) {
+		if (*src == '%') {
 			if (i + 2 >= src_len) {
 				goto not_escaped;
 			}
 			int high, low;
-			high = src_ptr[1];
-			low = src_ptr[2];
+			high = src[1];
+			low = src[2];
 			if (high >= '0' && high <= '9') {
 				high -= '0';
 			} else if (high >= 'a' && high <= 'f') {
@@ -48,35 +56,72 @@ void uri_decode_cstr_len(string *dst, char *src, size_t src_len) {
 			} else {
 				goto not_escaped;
 			}
-			*dst_ptr = (high << 4) | low;
+			char c = (high << 4) | low;
+			string_append_cstr_len(dst, &c, 1);
 			i += 2;
-			src_ptr += 2;
+			src += 2;
 			continue;
 		}
 	not_escaped:
-		*dst_ptr = *src_ptr;
+		string_append_cstr_len(dst, src, 1);
 	}
-	// reset the length of the string to the new known size
-	// this should be either doing nothing or shrinking it depending on whether we had any escaped characters
-	string_set_length(dst, dst_ptr - string_get_cstr(dst), 0);
-	for (size_t i = 0; i < string_get_length(dst); i++) {}
+
+	if (should_dealloc_temp) {
+		string_dealloc(&temp);
+	}
 }
 
-void uri_encode_str(string *dst, string *src) {
-	uri_encode_cstr_len(dst, string_get_cstr(src), string_get_length(src));
+void uri_append_encoded_str(string *dst, string *src) {
+	uri_append_encoded_cstr_len(dst, string_get_cstr(src), string_get_length(src));
 }
 
-void uri_encode_cstr(string *dst, char *src) {
-	uri_encode_cstr_len(dst, src, strlen(src));
+void uri_append_encoded_cstr(string *dst, char *src) {
+	uri_append_encoded_cstr_len(dst, src, strlen(src));
 }
 
-void uri_encode_cstr_len(string *dst, char *src, size_t src_len) {
-	/*
-	TODO JEFF implement uri_encode_cstr_len
+void uri_append_encoded_cstr_len(string *dst, char *src, size_t src_len) {
+	// TODO JEFF reserve size in dst ahead of time
 
-	from the rfc
-	unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
-	*/
+	// if src is a substring in dst we have to copy it, otherwise a future realloc might move this pointer
+	string temp;
+	int should_dealloc_temp;
+	if (src >= string_get_cstr(dst) && src < string_get_cstr(dst) + string_get_length(dst)) {
+		string_init_cstr_len(&temp, src, src_len);
+		should_dealloc_temp = 1;
+		src = string_get_cstr(&temp);
+	} else {
+		should_dealloc_temp = 0;
+	}
+
+	for (size_t i = 0; i < src_len; i++, src++) {
+		// https://datatracker.ietf.org/doc/html/rfc3986#section-2.2
+		// reserved = ":" / "/" / "?" / "#" / "[" / "]" / "@" / "!" / "$" / "&" / "'" / "(" / ")" / "*" / "+" / "," / ";" / "="
+		// https://datatracker.ietf.org/doc/html/rfc3986#section-2.3
+		// unreserved  = ALPHA / DIGIT / "-" / "." / "_" / "~"
+		char c = *src;
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' || c == '~' ||
+			c == ':' || c == '/' || c == '?' || c == '#' || c == '[' || c == ']' || c == '@' || c == '!' || c == '$' || c == '&' ||
+			c == '\'' || c == '(' || c == ')' || c == '*' || c == '+' || c == ',' || c == ';' || c == '=') {
+			string_append_cstr_len(dst, src, 1);
+		} else {
+			char encoded[] = {'%', ((uint8_t)c) / 16, ((uint8_t)c) % 16};
+			if (encoded[1] < 10) {
+				encoded[1] += '0';
+			} else {
+				encoded[1] += 'A' - 10;
+			}
+			if (encoded[2] < 10) {
+				encoded[2] += '0';
+			} else {
+				encoded[2] += 'A' - 10;
+			}
+			string_append_cstr_len(dst, encoded, 3);
+		}
+	}
+
+	if (should_dealloc_temp) {
+		string_dealloc(&temp);
+	}
 }
 
 void uri_init(uri *u) {
@@ -272,8 +317,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		size_t len = i - start;
 		if (len >= 1) {
 			u->has_path = 1;
-			string_set_cstr_len(&u->path, input + start, len);
-			uri_decode_str(&u->path, &u->path);
+			uri_append_decoded_cstr_len(&u->path, input + start, len);
 		}
 	}
 
@@ -293,8 +337,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		size_t len = i - start;
 		if (len >= 1) {
 			u->has_query = 1;
-			string_set_cstr_len(&u->query, input + start, len);
-			uri_decode_str(&u->query, &u->query);
+			uri_append_decoded_cstr_len(&u->query, input + start, len);
 		}
 	}
 
@@ -308,8 +351,7 @@ int uri_parse_cstr_len(uri *u, char *input, size_t input_length) {
 		i = input_length;
 		if (len >= 1) {
 			u->has_fragment = 1;
-			string_set_cstr_len(&u->fragment, input + start, len);
-			uri_decode_str(&u->fragment, &u->fragment);
+			uri_append_decoded_cstr_len(&u->fragment, input + start, len);
 		}
 	}
 
@@ -403,17 +445,14 @@ void uri_append_to_string(uri *u, string *s) {
 		string_append_cstrf(s, ":%d", u->port);
 	}
 	if (u->has_path) {
-		// TODO JEFF encode
-		string_append_str(s, &u->path);
+		uri_append_encoded_str(s, &u->path);
 	}
 	if (u->has_query) {
-		// TODO JEFF encode
 		string_append_cstr(s, "?");
-		string_append_str(s, &u->query);
+		uri_append_encoded_str(s, &u->query);
 	}
 	if (u->has_fragment) {
-		// TODO JEFF encode
 		string_append_cstr(s, "#");
-		string_append_str(s, &u->fragment);
+		uri_append_encoded_str(s, &u->fragment);
 	}
 }
